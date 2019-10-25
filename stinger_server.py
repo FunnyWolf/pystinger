@@ -33,7 +33,7 @@ from bottle import run as bottle_run
 from config import *
 
 global cache_conns, server_die_client_address
-global READ_BUFF_SIZE, LOG_LEVEL, SERVER_LISTEN, TARGET_ADDR, SOCKS5
+global READ_BUFF_SIZE, LOG_LEVEL, SERVER_LISTEN, TARGET_ADDR, SOCKS5, SOCKET_TIMEOUT
 
 
 # import SocketServer
@@ -183,35 +183,48 @@ class WebThread(Thread):  # 继承父类threading.Thread
                     logger.warning("CLIENT_ADDRESS:{} Create new tcp socket".format(client_address))
                     cache_conns[client_address] = {"conn": client}
                 except Exception as E:
-
                     logger.warning(
-                        "CLIENT_ADDRESS:{} TARGET_ADDR:{} create new socket failed".format(client_address, TARGET_ADDR))
+                        "CLIENT_ADDRESS:{} TARGET_ADDR:{} Create new socket failed".format(client_address, TARGET_ADDR))
                     continue
             else:
                 client = cache_conns.get(client_address).get("conn")
 
             tcp_send_data = base64.b64decode(data.get(client_address).get("data"))
 
-            # 发送数据
-            try:
-                client.sendall(tcp_send_data)
-            except Exception as E:  # socket 已失效
-                logger.warning("CLIENT_ADDRESS:{} client send failed".format(client_address))
+            send_flag = False
+            for i in range(20):
+                # 发送数据
+                try:
+                    client.sendall(tcp_send_data)
+                    logger.info("CLIENT_ADDRESS:{} TCP_SEND_LEN:{}".format(client_address, len(tcp_send_data)))
+                    send_flag = True
+                    break
+                except Exception as E:  # socket 已失效
+                    logger.warning("CLIENT_ADDRESS:{} Client send failed".format(client_address))
+                    logger.exception(E)
+
+            if send_flag is not True:
                 try:
                     client.close()
                     cache_conns.pop(client_address)
                 except Exception as E:
                     logger.exception(E)
-                    continue
-            # 读取数据
+                continue
 
-            try:
-                tcp_recv_data = client.recv(READ_BUFF_SIZE)
-                web_return_data[client_address] = {"data": base64.b64encode(tcp_recv_data)}
-                logger.debug("CLIENT_ADDRESS:{} TCP_RECV_DATA:{}".format(client_address, tcp_recv_data))
-                if len(tcp_recv_data) > 0:
-                    logger.info("CLIENT_ADDRESS:{} TCP_RECV_LEN:{}".format(client_address, len(tcp_recv_data)))
-            except Exception as err:
+            revc_flag = False
+            for i in range(3):
+                # 读取数据
+                try:
+                    tcp_recv_data = client.recv(READ_BUFF_SIZE)
+                    web_return_data[client_address] = {"data": base64.b64encode(tcp_recv_data)}
+                    logger.debug("CLIENT_ADDRESS:{} TCP_RECV_DATA:{}".format(client_address, tcp_recv_data))
+                    if len(tcp_recv_data) > 0:
+                        logger.info("CLIENT_ADDRESS:{} TCP_RECV_LEN:{}".format(client_address, len(tcp_recv_data)))
+                    revc_flag = True
+                    break
+                except Exception as err:
+                    pass
+            if revc_flag is not True:
                 tcp_recv_data = b""
                 web_return_data[client_address] = {"data": base64.b64encode(tcp_recv_data)}
                 logger.debug("TCP_RECV_NONE")
@@ -240,13 +253,29 @@ if __name__ == '__main__':
             logger = get_logger(level=LOG_LEVEL, name="FileLogger")
     except Exception as E:
         logger = get_logger(level=LOG_LEVEL, name="FileLogger")
-
+    # read_buff_size
     try:
         READ_BUFF_SIZE = int(configini.get("TOOL-CONFIG", "READ_BUFF_SIZE"))
     except Exception as E:
         logger.exception(E)
         READ_BUFF_SIZE = 10240
 
+    try:
+        socks5_on = configini.get("ADVANCED-CONFIG", "SOCKS5")
+        if socks5_on.lower() == "true":
+            SOCKS5 = True
+        else:
+            SOCKS5 = False
+    except Exception as E:
+        SOCKS5 = False
+
+    # socket_timeout
+    try:
+        SOCKET_TIMEOUT = float(configini.get("TOOL-CONFIG", "SOCKET_TIMEOUT"))
+    except Exception as E:
+        SOCKET_TIMEOUT = 0.1
+
+    # socks5
     try:
         socks5_on = configini.get("ADVANCED-CONFIG", "SOCKS5")
         if socks5_on.lower() == "true":
@@ -265,8 +294,8 @@ if __name__ == '__main__':
         sys.exit(1)
 
     logger.info(
-        "\nLOG_LEVEL: {}\nREAD_BUFF_SIZE: {}\nSERVER_LISTEN: {}\nTARGET_ADDR: {}\nSOCKS5: {}\n".format(
-            LOG_LEVEL, READ_BUFF_SIZE, SERVER_LISTEN, TARGET_ADDR, SOCKS5
+        "\nLOG_LEVEL: {}\nREAD_BUFF_SIZE: {}\nSERVER_LISTEN: {}\nTARGET_ADDR: {}\nSOCKS5: {}\nSOCKET_TIMEOUT: {}\n".format(
+            LOG_LEVEL, READ_BUFF_SIZE, SERVER_LISTEN, TARGET_ADDR, SOCKS5, SOCKET_TIMEOUT
         ))
 
     cache_conns = {}

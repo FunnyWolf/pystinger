@@ -13,7 +13,7 @@ import logging.config
 DATA = "DATA"
 WRONG_DATA = b"WRONG DATA"  # 错误格式的数据
 INVALID_CONN = b"REMOVE CONN"  # 无效的连接
-SOCKET_TIMEOUT = 0.01
+
 
 
 # 	data = strings.Replace(strings.Replace(data, "\r\n", "", -1), "\n", "", -1)

@@ -22,10 +22,12 @@ import time
 from threading import Thread
 
 import requests
+from requests.packages.urllib3.exceptions import InsecureRequestWarning
 
+requests.packages.urllib3.disable_warnings(InsecureRequestWarning)
 from config import *
 
-global LOG_LEVEL, SLEEP_TIME, READ_BUFF_SIZE, WEBSHELL, TARGET_ADDR, LOCAL_ADDR
+global LOG_LEVEL, SLEEP_TIME, READ_BUFF_SIZE, WEBSHELL, TARGET_ADDR, LOCAL_ADDR, CLEAN_DIE, SOCKET_TIMEOUT
 global cache_conns, die_client_address, not_in_server_cache_conns
 
 
@@ -53,7 +55,7 @@ class LoopThread(Thread):  # 继承父类threading.Thread
         }
         for i in range(5):
             try:
-                r = requests.post(WEBSHELL, data=payload, timeout=3)
+                r = requests.post(WEBSHELL, data=payload, timeout=3, verify=False)
                 web_return_data = json.loads(b64decodeX(r.content).decode("utf-8"))
             except Exception as E:
                 logger.error(r.content)
@@ -84,42 +86,36 @@ class LoopThread(Thread):  # 继承父类threading.Thread
         }
         data = {}
         # 清除无效的client
+
         for client_address in self.die_client_address:
             try:
                 one = cache_conns.pop(client_address)
                 one.get("conn").close()
-                logger.warning("CLIENT_ADDRESS:{} close client not in server cache_conns ".format(client_address))
+                logger.warning("CLIENT_ADDRESS:{} close client in die_client_address".format(client_address))
             except Exception as E:
                 logger.warning(
-                    "CLIENT_ADDRESS:{} close client not in server cache_conns error".format(client_address))
+                    "CLIENT_ADDRESS:{} close client close client in die_client_address error".format(client_address))
 
-        has_data_to_send = False
         for client_address in list(cache_conns.keys()):
             client = cache_conns.get(client_address).get("conn")
             try:
                 tcp_recv_data = client.recv(READ_BUFF_SIZE)
                 logger.debug("CLIENT_ADDRESS:{} TCP_RECV_DATA:{}".format(client_address, tcp_recv_data))
                 if len(tcp_recv_data) > 0:
-                    has_data_to_send = True
                     logger.info("CLIENT_ADDRESS:{} TCP_RECV_LEN:{}".format(client_address, len(tcp_recv_data)))
             except Exception as err:
                 tcp_recv_data = b""
                 logger.debug("TCP_RECV_NONE")
             data[client_address] = {"data": base64.b64encode(tcp_recv_data)}
 
-        # 如果没有数据需要发送
-        # if has_data_to_send is not True and len(self.die_client_address) <= 0:
-        #     time.sleep(3)
-        #     logger.info("No action to do")
-        #     return
-
         payload["DATA"] = b64encodeX(json.dumps(data))
         payload["Die_client_address"] = b64encodeX(json.dumps(self.die_client_address))
 
         try:
-            r = requests.post(WEBSHELL, data=payload)
+            r = requests.post(WEBSHELL, data=payload, verify=False)
         except Exception as E:
             logger.warning("Post data to webshell failed")
+            logger.exception(E)
             return
 
         try:
@@ -142,22 +138,29 @@ class LoopThread(Thread):  # 继承父类threading.Thread
                 client = cache_conns.get(client_address).get("conn")
                 tcp_send_data = base64.b64decode(web_return_data.get(client_address).get("data"))
             except Exception as E:
-                logger.warning("CLIENT_ADDRESS:{} Client socket closed".format(client_address))
+                logger.warning("CLIENT_ADDRESS:{} server socket not in client socket list".format(client_address))
                 self.die_client_address.append(client_address)
                 continue
 
             try:
                 client.send(tcp_send_data)
+                logger.debug("CLIENT_ADDRESS:{} TCP_SEND_DATA:{}".format(client_address, tcp_send_data))
             except Exception as E:
-                logger.warning("CLIENT_ADDRESS:{} Client socket closed".format(client_address))
+                logger.warning("CLIENT_ADDRESS:{} Client socket send failed".format(client_address))
                 self.die_client_address.append(client_address)
-                client.close()
-                cache_conns.pop(client_address)
+                try:
+                    client.close()
+                    cache_conns.pop(client_address)
+                except Exception as E:
+                    logger.exception(E)
+
         # 检查没有在server返回列表中的client
-        for client_address in list(cache_conns.keys()):
-            if web_return_data.get(client_address) is None:
-                logger.warning("CLIENT_ADDRESS:{} remove client not in server cache_conns".format(client_address))
-                self.die_client_address.append(client_address)
+
+        if CLEAN_DIE:
+            for client_address in list(cache_conns.keys()):
+                if web_return_data.get(client_address) is None:
+                    logger.warning("CLIENT_ADDRESS:{} remove client not in server cache_conns".format(client_address))
+                    self.die_client_address.append(client_address)
 
 
 class TCPClient(BaseRequestHandler):
@@ -182,7 +185,15 @@ if __name__ == '__main__':
     except Exception as E:
         LOG_LEVEL = "INFO"
     logger = get_logger(level=LOG_LEVEL, name="StreamLogger")
-
+    try:
+        CLEAN_DIE_str = configini.get("TOOL-CONFIG", "CLEAN_DIE")
+        if CLEAN_DIE_str.lower() == "true":
+            CLEAN_DIE = True
+        else:
+            CLEAN_DIE = False
+    except Exception as E:
+        CLEAN_DIE = True
+    # read_buff_size
     try:
         READ_BUFF_SIZE = int(configini.get("TOOL-CONFIG", "READ_BUFF_SIZE"))
     except Exception as E:
@@ -199,6 +210,11 @@ if __name__ == '__main__':
 
     READ_BUFF_SIZE = 10240
 
+    # socket_timeout
+    try:
+        SOCKET_TIMEOUT = float(configini.get("TOOL-CONFIG", "SOCKET_TIMEOUT"))
+    except Exception as E:
+        SOCKET_TIMEOUT = 0.1
     # 获取核心参数
     try:
         WEBSHELL = configini.get("NET-CONFIG", "WEBSHELL")
@@ -218,8 +234,8 @@ if __name__ == '__main__':
 
     logger.info(" ------------Client Config------------")
     logger.info(
-        "\nLOG_LEVEL: {}\nSLEEP_TIME:{}\nREAD_BUFF_SIZE: {}\nWEBSHELL: {}\nREMOTE_SERVER: {}\nLOCAL_ADDR: {}\n".format(
-            LOG_LEVEL, SLEEP_TIME, READ_BUFF_SIZE, WEBSHELL, REMOTE_SERVER, LOCAL_ADDR
+        "\nLOG_LEVEL: {}\nSLEEP_TIME:{}\nREAD_BUFF_SIZE: {}\nWEBSHELL: {}\nREMOTE_SERVER: {}\nLOCAL_ADDR: {}\nSOCKET_TIMEOUT: {}\n".format(
+            LOG_LEVEL, SLEEP_TIME, READ_BUFF_SIZE, WEBSHELL, REMOTE_SERVER, LOCAL_ADDR,SOCKET_TIMEOUT
         ))
 
     cache_conns = {}

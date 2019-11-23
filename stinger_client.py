@@ -159,8 +159,15 @@ class LoopThread(Thread):  # 继承父类threading.Thread
         if CLEAN_DIE:
             for client_address in list(cache_conns.keys()):
                 if web_return_data.get(client_address) is None:
-                    logger.warning("CLIENT_ADDRESS:{} remove client not in server cache_conns".format(client_address))
-                    self.die_client_address.append(client_address)
+                    if cache_conns.get(client_address).get("new") is True:
+                        cache_conns[client_address]["new"] = False
+                        pass
+                    else:
+                        logger.warning(
+                            "CLIENT_ADDRESS:{} remove client not in server CHCHE_CONNS".format(client_address))
+                        logger.warning("CLIENT_ADDRESS:{} append in die_client_address".format(client_address))
+                        self.die_client_address.append(client_address)
+
 
 
 class TCPClient(BaseRequestHandler):
@@ -168,7 +175,10 @@ class TCPClient(BaseRequestHandler):
         logger.warning('Got connection from {}'.format(self.client_address))
         self.request.settimeout(SOCKET_TIMEOUT)
         key = "{}:{}".format(self.client_address[0], self.client_address[1])
-        cache_conns[key] = {"conn": self.request}
+        cache_conns[key] = {
+            "conn": self.request,
+            "new": True,  # 新的连接,第一次检查略过
+        }
         while True:
             time.sleep(10)  # 维持tcp连接
 
@@ -198,7 +208,7 @@ if __name__ == '__main__':
         READ_BUFF_SIZE = int(configini.get("TOOL-CONFIG", "READ_BUFF_SIZE"))
     except Exception as E:
         logger.exception(E)
-        READ_BUFF_SIZE = 10240
+        READ_BUFF_SIZE = 51200
 
     try:
         SLEEP_TIME = float(configini.get("TOOL-CONFIG", "SLEEP_TIME"))
@@ -208,7 +218,6 @@ if __name__ == '__main__':
         logger.exception(E)
         SLEEP_TIME = 0.1
 
-    READ_BUFF_SIZE = 10240
 
     # socket_timeout
     try:

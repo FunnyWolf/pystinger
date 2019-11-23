@@ -57,7 +57,7 @@ SLEEP_TIME = 0.01
 [ADVANCED-CONFIG]
 SOCKS5 = True
 ```
-* 将stinger_server.exe和config.ini上传到目标服务器同一目录,菜刀(蚁剑)执行mirror_server.exe启动服务端
+* 将stinger_server.exe和config.ini上传到目标服务器同一目录,菜刀(蚁剑)执行stinger_server.exe启动服务端
 * stinger_client和config.ini拷贝到本地PC的同一目录,命令行执行stinger_client,生成如下输出表示成功
 ```
 2019-09-29 13:03:41,164 - INFO - 215 - Use SERVER_LISTEN as REMOTE_SERVER
@@ -86,7 +86,9 @@ SOCK5: True
 * 此时已经你本地10800启动了一个192.168.3.10所在内网的socks5代理
 # 相关工具
 [https://github.com/nccgroup/ABPTTS](https://github.com/nccgroup/ABPTTS)
+
 [https://github.com/sensepost/reGeorg](https://github.com/sensepost/reGeorg)
+
 [https://github.com/SECFORCE/Tunna](https://github.com/SECFORCE/Tunna)
 # 已测试
 ## stinger_server\stinger_client
@@ -100,4 +102,14 @@ SOCK5: True
 **1.0**
 更新时间: 2019-09-29
 * 1.0正式版发布
+
+**1.1**
+更新时间: 2019-10-25
+* 增加SOCKET_TIMEOUT参数
+* 适配https网站
+* 服务端增加socket重试机制,增强socket健壮性
+
+**1.2**
+更新时间: 2019-11-23
+* 修复TCP首次连接可能被重置的问题
 

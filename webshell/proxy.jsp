@@ -27,7 +27,7 @@
                 }
             } catch (Exception e) {
                 System.out.println("error to send post！" + e);
-                return e.toString();
+                return "30" + e.toString();
             } finally {
                 try {
                     if (ou != null) {
@@ -37,7 +37,7 @@
                         in.close();
                     }
                 } catch (IOException ex) {
-                    return ex.toString();
+                    return "40" +ex.toString();
                 }
             }
             return result;

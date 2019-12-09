@@ -1,0 +1,5 @@
+PyInstaller
+requests
+bottle
+twisted
+ipaddr

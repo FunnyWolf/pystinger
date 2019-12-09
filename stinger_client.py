@@ -53,6 +53,7 @@ class ClientCenter(threading.Thread):
         self.SLEEP_TIME = 0.01
         self.WEBSHELL = None
         self.REMOTE_SERVER = None
+        self.SINGLE_MODE = False
         # 缓存变量
         self.die_client_address = []
         self.session = requests.session()
@@ -145,8 +146,10 @@ class ClientCenter(threading.Thread):
                 client_socket_conn = self.CACHE_CONNS.get(client_address).get("conn")
                 server_tcp_send_data = base64.b64decode(post_return_data.get(client_address).get("data"))
             except Exception as E:
-                self.logger.warning("CLIENT_ADDRESS:{} server socket not in client socket list".format(client_address))
-                self.die_client_address.append(client_address)
+                if self.SINGLE_MODE is True:
+                    self.logger.warning("CLIENT_ADDRESS:{} server socket not in client socket list".format(client_address))
+                    self.logger.warning("SINGLE_MODE: {} ,remove is conn from server".format( self.SINGLE_MODE))
+                    self.die_client_address.append(client_address)
                 continue
             # 将返回的数据发送到client Tcp连接中
 
@@ -208,6 +211,26 @@ class ClientCenter(threading.Thread):
         if result is None:  # 失败回退
             self.REMOTE_SERVER = None
         return result
+
+    def gets_config(self, REMOTE_SERVER=None):
+        if REMOTE_SERVER is None:
+            for port in CONTROL_PORT:
+                for i in range(2):
+                    self.REMOTE_SERVER = "http://{}:{}".format(LOCALADDR, port)
+                    result = self._post_data(URL_CHECK)
+                    if result is None:  # 失败回退
+                        self.REMOTE_SERVER = None
+                        continue
+                    else:
+                        return result
+            return None
+        self.REMOTE_SERVER = REMOTE_SERVER
+        result = self._post_data(URL_CHECK)
+        if result is None:  # 失败回退
+            self.REMOTE_SERVER = None
+        return result
+
+
 
     def setc_localaddr(self, ip, port):
         if port_is_used(port, ip):
@@ -435,12 +458,7 @@ if __name__ == '__main__':
                         help="local listen port for socks5.",
                         )
 
-    parser.add_argument('-c', '--cleansockst', default=False,
-                        nargs='?',
-                        metavar="true",
-                        type=bool,
-                        help="clean server exist socket(this will kill other client connect)",
-                        )
+
     parser.add_argument('-st', '--sockettimeout', default=0.05,
                         metavar="N",
                         type=float,
@@ -450,6 +468,18 @@ if __name__ == '__main__':
                         metavar="N",
                         type=float,
                         help="sleep time between every post request",
+                        )
+    parser.add_argument('-c', '--cleansockst', default=False,
+                        nargs='?',
+                        metavar="true",
+                        type=bool,
+                        help="clean server exist socket(this will kill other client connect)",
+                        )
+    parser.add_argument('-sm', '--singlemode', default=False,
+                        nargs='?',
+                        metavar="true",
+                        type=bool,
+                        help="clean server exist socket(this will kill other client connect)",
                         )
     args = parser.parse_args()
     WEBSHELL = args.webshell
@@ -461,6 +491,14 @@ if __name__ == '__main__':
         CLEAN_SOCKET = True
     else:
         CLEAN_SOCKET = False
+
+    SINGLE_MODE = args.singlemode
+    if SINGLE_MODE is not False:
+        SINGLE_MODE = True
+        globalClientCenter.SINGLE_MODE = SINGLE_MODE
+        globalClientCenter.logger.info("SINGLE_MODE : {}".format(SINGLE_MODE))
+    else:
+        SINGLE_MODE = False
 
     globalClientCenter = ClientCenter()
     flag = globalClientCenter.setc_localaddr(LISTEN_ADDR, LISTEN_PORT)

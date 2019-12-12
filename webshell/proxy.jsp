@@ -91,11 +91,10 @@
 					}
 				}
 				//关闭连接
-			} catch (MalformedURLException e) {
-				e.printStackTrace();
-			} catch (IOException e) {
-				e.printStackTrace();
-			}finally {
+			}  catch (Exception e) {
+                System.out.println("error to send post" + e);
+                return "30" + e.toString();
+            }  finally {
 				if(br!=null){
 					try {
 						br.close();

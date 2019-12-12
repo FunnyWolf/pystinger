@@ -84,7 +84,9 @@ class ClientCenter(threading.Thread):
             else:
                 return web_return_data
         except Exception as E:
+
             self.logger.warning("WEBSHELL return wrong data")
+            self.logger.warning(r.content)
             return None
 
     def run(self):

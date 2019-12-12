@@ -8,7 +8,8 @@
 
 ########### only for python2.7 because pyinstaller
 # import twisted
-
+# import rocket
+import time
 from socket import AF_INET, SOCK_STREAM
 
 from bottle import request, route, run as bottle_run
@@ -28,7 +29,7 @@ class ServerGlobal(object):
         if self.NO_LOG:
             self.logger = get_logger(level=self.LOG_LEVEL, name="StreamLogger")
         else:
-            self.logger = get_logger(level=self.LOG_LEVEL, name="FileLogger")
+            self.logger = get_logger(level=self.LOG_LEVEL, name="StreamLogger")
 
         self.SERVER_LISTEN = None
 
@@ -45,12 +46,12 @@ class ServerGlobal(object):
             if self.NO_LOG:
                 self.logger = get_logger(level=self.LOG_LEVEL, name="StreamLogger")
             else:
-                self.logger = get_logger(level=self.LOG_LEVEL, name="FileLogger")
+                self.logger = get_logger(level=self.LOG_LEVEL, name="StreamLogger")
         elif tag == "NO_LOG":
             if self.NO_LOG:
                 self.logger = get_logger(level=self.LOG_LEVEL, name="StreamLogger")
             else:
-                self.logger = get_logger(level=self.LOG_LEVEL, name="FileLogger")
+                self.logger = get_logger(level=self.LOG_LEVEL, name="StreamLogger")
             self.NO_LOG = data
         else:
             return False
@@ -62,17 +63,22 @@ class ServerGlobal(object):
             try:
                 for key in serverGlobal.CHCHE_CONNS.keys():
                     one = serverGlobal.CHCHE_CONNS.pop(key)
+                    self.logger.warning("Close time begin:　{}".format(time.time()))
                     one.get("conn").close()
+                    self.logger.warning("Close time end:　{}".format(time.time()))
                 serverGlobal.logger.info("Clean exist sockets")
                 return True
             except Exception as E:
                 serverGlobal.logger.exception(E)
                 return False
+        else:
+            serverGlobal.logger.warn("Unknow cmd :{}".format(tag))
+            return False
 
 
 class ControlCenter(object):
 
-    def __init__(self, ):
+    def __init__(self):
         pass
 
     def run(self):
@@ -105,10 +111,12 @@ class ControlCenter(object):
     def set_config():
         """参数设置函数"""
         try:
+            serverGlobal.logger.warn("set_config in")
             senddata = ControlCenter._get_post_data(request)
             tag = senddata.get(CONFIG_TAG)
             data = senddata.get(CONFIG_DATA)
             result = serverGlobal.set(tag, data)
+            serverGlobal.logger.warn("set_config out")
             return newDumps(result)
         except Exception as E:
             serverGlobal.logger.exception(E)
@@ -120,10 +128,12 @@ class ControlCenter(object):
     def run_cmd():
         """命令执行函数"""
         try:
+            serverGlobal.logger.warn("run_cmd in")
             senddata = ControlCenter._get_post_data(request)
             tag = senddata.get(CONFIG_TAG)
             data = senddata.get(CONFIG_DATA)
             result = serverGlobal.cmd(tag, data)
+            serverGlobal.logger.warn("run_cmd out")
             return newDumps(result)
         except Exception as E:
             serverGlobal.logger.exception(E)
@@ -285,6 +295,7 @@ if __name__ == '__main__':
             serverGlobal.SOCKET_TIMEOUT,
             serverGlobal.NO_LOG
         ))
+
     try:
         # 主控Web服务
         webthread = ControlCenter()

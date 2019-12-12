@@ -74,20 +74,16 @@ def get_logger(level="INFO", name="StreamLogger"):
                 'level': 'DEBUG',
                 'formatter': 'simple'
             },
-            'file': {
-                'class': 'logging.FileHandler',
-                'filename': 'logging.log',
-                'level': 'WARN',
-                'formatter': 'simple'
-            },
+            # 'file': {
+            #     'class': 'logging.FileHandler',
+            #     'filename': 'logging.log',
+            #     'level': 'WARN',
+            #     'formatter': 'simple'
+            # },
         },
         'loggers': {
             'StreamLogger': {
-                'handlers': ['console', 'file'],
-                'level': level,
-            },
-            'FileLogger': {
-                'handlers': ['file'],
+                'handlers': ['console'],
                 'level': level,
             },
         }

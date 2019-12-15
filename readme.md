@@ -5,7 +5,8 @@
 
 ## SOCK4代理
 * proxy.php上传到目标服务器,确保 [http://192.168.3.11:8080/proxy.jsp](http://192.168.3.11:8080/proxy.jsp)可以访问,页面返回 stinger XXX!
-* 将stinger_server.exe上传到目标服务器,菜刀(蚁剑)执行```cmd -c D:/test/stinger_server.exe```启动服务端(不要直接运行exe文件,会导致tcp断连)
+* 将stinger_server.exe和stinger_server.vbs上传到目标服务器,菜刀(蚁剑)执行```stinger_server.vbs```启动服务端
+(修改vbs中路径,不要直接运行exe文件,会导致tcp断连)
 * stinger_client命令行执行```./stinger_client -w http://192.168.3.11:8080/proxy.jsp -l 0.0.0.0 -p 60000```,生成如下输出表示成功
 ```
 root@kali:~# ./stinger_client -w http://192.168.3.11:8080/proxy.jsp -l 0.0.0.0 -p 60000

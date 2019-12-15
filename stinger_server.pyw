@@ -86,7 +86,7 @@ class ControlCenter(object):
         bottle_run(host=serverGlobal.SERVER_LISTEN.split(":")[0],
                    port=int(serverGlobal.SERVER_LISTEN.split(":")[1]),
                    quiet=True,
-                   server='twisted'
+                   # server='twisted'
                    )
         serverGlobal.logger.warning("WebServer exit")
 

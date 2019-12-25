@@ -37,6 +37,14 @@ global globalClientCenter
 
 class ClientCenter(threading.Thread):
     def __init__(self):
+
+        self.headers = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.36',
+            "Connection": "keep-alive",
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+            "Accept-Language": "zh-CN,zh;q=0.8",
+            'Accept-Encoding': 'gzip',
+        }
         self.CACHE_CONNS = {}
         # {
         #     "conn": self.request,
@@ -69,7 +77,7 @@ class ClientCenter(threading.Thread):
         try:
             # timeout 要大于脚本中post的超时时间
             headers = {'Connection': 'keep-alive'}
-            r = self.session.post(self.WEBSHELL, data=payload, verify=False, timeout=15, headers=headers)
+            r = self.session.post(self.WEBSHELL, data=payload, verify=False, timeout=15, headers=self.headers)
 
         except Exception as E:
             self.logger.warning("Post data to WEBSHELL failed")
@@ -149,8 +157,9 @@ class ClientCenter(threading.Thread):
                 server_tcp_send_data = base64.b64decode(post_return_data.get(client_address).get("data"))
             except Exception as E:
                 if self.SINGLE_MODE is True:
-                    self.logger.warning("CLIENT_ADDRESS:{} server socket not in client socket list".format(client_address))
-                    self.logger.warning("SINGLE_MODE: {} ,remove is conn from server".format( self.SINGLE_MODE))
+                    self.logger.warning(
+                        "CLIENT_ADDRESS:{} server socket not in client socket list".format(client_address))
+                    self.logger.warning("SINGLE_MODE: {} ,remove is conn from server".format(self.SINGLE_MODE))
                     self.die_client_address.append(client_address)
                 continue
             # 将返回的数据发送到client Tcp连接中
@@ -187,7 +196,7 @@ class ClientCenter(threading.Thread):
 
     def setc_webshell(self, WEBSHELL):
         try:
-            r = requests.get(WEBSHELL, verify=False, timeout=3)
+            r = requests.get(WEBSHELL, verify=False, timeout=3, headers=self.headers, )
             if b"stinger" in r.content:
                 self.WEBSHELL = WEBSHELL
                 return True
@@ -231,8 +240,6 @@ class ClientCenter(threading.Thread):
         if result is None:  # 失败回退
             self.REMOTE_SERVER = None
         return result
-
-
 
     def setc_localaddr(self, ip, port):
         if port_is_used(port, ip):
@@ -459,7 +466,6 @@ if __name__ == '__main__':
                         type=int,
                         help="local listen port for socks5.",
                         )
-
 
     parser.add_argument('-st', '--sockettimeout', default=0.05,
                         metavar="N",

@@ -7,8 +7,15 @@
 # @Contact : github.com/FunnyWolf
 
 ########### only for python2.7 because pyinstaller
-# import twisted
-# import rocket
+
+try:
+    from socketserver import BaseRequestHandler
+    from socketserver import ThreadingTCPServer
+except Exception as E:
+    from SocketServer import BaseRequestHandler
+    from SocketServer import ThreadingTCPServer
+
+import threading
 import time
 from socket import AF_INET, SOCK_STREAM
 
@@ -19,9 +26,20 @@ from config import *
 global serverGlobal
 
 
+class MirrorRequestHandler(BaseRequestHandler):
+    def handle(self):
+        serverGlobal.logger.info('Got connection from {}'.format(self.client_address))
+        self.request.settimeout(serverGlobal.SOCKET_TIMEOUT)
+        key = "{}:{}".format(self.client_address[0], self.client_address[1])
+        serverGlobal.MIRROR_CHCHE_CONNS[key] = {"conn": self.request}
+        while True:
+            time.sleep(0.1)  # 维持tcp连接
+
+
 class ServerGlobal(object):
     def __init__(self):
         self.CHCHE_CONNS = {}
+        self.MIRROR_CHCHE_CONNS = {}
         self.READ_BUFF_SIZE = BUFSIZE
         self.SOCKET_TIMEOUT = DEFAULT_SOCKET_TIMEOUT
         self.LOG_LEVEL = "INFO"
@@ -32,6 +50,7 @@ class ServerGlobal(object):
             self.logger = get_logger(level=self.LOG_LEVEL, name="StreamLogger")
 
         self.SERVER_LISTEN = None
+        self.MIRROR_LISTEN = None
 
     def set(self, tag, data):
         """设置服务端参数"""
@@ -76,9 +95,10 @@ class ServerGlobal(object):
             return False
 
 
-class ControlCenter(object):
+class ControlCenter(threading.Thread):
 
     def __init__(self):
+        threading.Thread.__init__(self)
         pass
 
     def run(self):
@@ -149,12 +169,18 @@ class ControlCenter(object):
         key_list = []
         for key in serverGlobal.CHCHE_CONNS:
             key_list.append(key)
+
+        mirror_key_list = []
+        for key in serverGlobal.MIRROR_CHCHE_CONNS:
+            mirror_key_list.append(key)
+
         data = {
             "client_address_list": key_list,
+            "mirror_address_list": mirror_key_list,
             "LOG_LEVEL": serverGlobal.LOG_LEVEL,
             "READ_BUFF_SIZE": serverGlobal.READ_BUFF_SIZE,
             "SERVER_LISTEN": serverGlobal.SERVER_LISTEN,
-
+            "MIRROR_LISTEN": serverGlobal.MIRROR_LISTEN,
         }
         return newDumps(data)
 
@@ -162,11 +188,16 @@ class ControlCenter(object):
     @route(URL_STINGER_SYNC, method='POST')
     def sync():
         # 获取webshell发送的数据
+
         post_return_data = {}
+        mirror_post_return_data = {}
         try:
             senddata = ControlCenter._get_post_data(request)
             post_send_data = senddata.get(DATA_TAG)
             die_client_address = senddata.get(DIE_CLIENT_ADDRESS_TAG)
+
+            mirror_post_send_data = senddata.get(MIRROR_DATA_TAG)
+            mirror_die_client_address = senddata.get(MIRROR_DIE_CLIENT_ADDRESS_TAG)
         except Exception as E:
             serverGlobal.logger.exception(E)
             post_return_data = {ERROR_CODE: str(E)}
@@ -177,9 +208,18 @@ class ControlCenter(object):
             try:
                 one = serverGlobal.CHCHE_CONNS.pop(client_address)
                 one.get("conn").close()
-                serverGlobal.logger.warning("CLIENT_ADDRESS:{} Close die_client_address ".format(client_address))
+                serverGlobal.logger.info("CLIENT_ADDRESS:{} Close die_client_address ".format(client_address))
             except Exception as E:
                 serverGlobal.logger.warning("CLIENT_ADDRESS:{} Close die_client_address error".format(client_address))
+
+        for client_address in mirror_die_client_address:
+            try:
+                one = serverGlobal.MIRROR_CHCHE_CONNS.pop(client_address)
+                one.get("conn").close()
+                serverGlobal.logger.info("CLIENT_ADDRESS:{} Close mirror_die_client_address ".format(client_address))
+            except Exception as E:
+                serverGlobal.logger.warning(
+                    "CLIENT_ADDRESS:{} Close mirror_die_client_address error".format(client_address))
 
         # 处理tcp发送的数据
         for client_address in list(post_send_data.keys()):
@@ -262,11 +302,87 @@ class ControlCenter(object):
                 post_return_data[client_address] = {"data": base64.b64encode(tcp_recv_data)}
                 serverGlobal.logger.debug("TCP_RECV_NONE")
 
+        # mirror
+        # 处理client tcp接收的数据(mirror)
+        for mirror_client_address in list(mirror_post_send_data.keys()):
+            client_address_one_data = mirror_post_send_data.get(mirror_client_address)
+
+            if serverGlobal.MIRROR_CHCHE_CONNS.get(mirror_client_address) is None:
+                serverGlobal.logger.warning("MIRROR_CLIENT_ADDRESS:{} not in MIRROR_CHCHE_CONNS".format(mirror_client_address))
+                continue
+            else:
+                server_socket_conn = serverGlobal.MIRROR_CHCHE_CONNS.get(mirror_client_address).get("conn")
+
+            # 发送数据 tcp数据
+            try:
+                tcp_send_data = base64.b64decode(client_address_one_data.get("data"))
+            except Exception as E:
+                serverGlobal.logger.exception(E)
+                continue
+
+            send_flag = False
+            for i in range(3):
+                if tcp_send_data == '':
+                    # 无数据发送跳出
+                    send_flag = True
+                    break
+                try:
+                    server_socket_conn.settimeout((i * 10 + 1) * serverGlobal.SOCKET_TIMEOUT)
+                    server_socket_conn.sendall(tcp_send_data)
+                    if len(tcp_send_data) > 0:
+                        serverGlobal.logger.info(
+                            "MIRROR_CLIENT_ADDRESS:{} CLIENT_TCP_SEND_LEN:{}".format(mirror_client_address,
+                                                                              len(tcp_send_data)))
+
+                    send_flag = True
+                    break
+                except Exception as E:  # socket 已失效
+                    serverGlobal.logger.warning("MIRROR_CLIENT_ADDRESS:{} Client send failed".format(mirror_client_address))
+                    serverGlobal.logger.exception(E)
+
+            if send_flag is not True:
+                try:
+                    server_socket_conn.close()
+                    serverGlobal.MIRROR_CHCHE_CONNS.pop(mirror_client_address)
+                except Exception as E:
+                    serverGlobal.logger.exception(E)
+                continue
+
+        # 读取server tcp连接数据,存入post返回包中
+        for mirror_client_address in list(serverGlobal.MIRROR_CHCHE_CONNS.keys()):
+            server_socket_conn = serverGlobal.MIRROR_CHCHE_CONNS.get(mirror_client_address).get("conn")
+            revc_flag = False
+            for i in range(1):
+                try:
+                    # server_socket_conn.settimeout((i*3+1)*serverGlobal.SOCKET_TIMEOUT)
+                    tcp_recv_data = server_socket_conn.recv(serverGlobal.READ_BUFF_SIZE)
+                    mirror_post_return_data[mirror_client_address] = {"data": base64.b64encode(tcp_recv_data)}
+                    serverGlobal.logger.debug(
+                        "MIRROR_CLIENT_ADDRESS:{} SERVER_TCP_RECV_DATA:{}".format(mirror_client_address, tcp_recv_data))
+                    if len(tcp_recv_data) > 0:
+                        serverGlobal.logger.info(
+                            "MIRROR_CLIENT_ADDRESS:{} SERVER_TCP_RECV_LEN:{}".format(mirror_client_address,
+                                                                              len(tcp_recv_data)))
+                    revc_flag = True
+                    break
+                except Exception as err:
+                    pass
+            if revc_flag is not True:
+                tcp_recv_data = b""
+                mirror_post_return_data[mirror_client_address] = {"data": base64.b64encode(tcp_recv_data)}
+                serverGlobal.logger.debug("TCP_RECV_NONE")
+
         # 循环结束,返回web数据
-        return newDumps(post_return_data)
+        return_data = {RETURN_DATA: post_return_data, MIRROR_RETURN_DATA: mirror_post_return_data}
+        return newDumps(return_data)
 
 
 if __name__ == '__main__':
+
+    if len(sys.argv) > 1:
+        listenip = sys.argv[1]
+    else:
+        listenip = LOCALADDR
 
     # 运行主控web服务
     SERVER_LISTEN = None
@@ -280,18 +396,32 @@ if __name__ == '__main__':
         print("[x] There is no available control server port")
         exit(1)
 
+    MIRROR_LISTEN = None
+    for port in MIRROR_PORT:
+        if port_is_used(port):
+            continue
+        else:
+            MIRROR_LISTEN = "{}:{}".format(listenip, port)
+            break
+    if MIRROR_LISTEN is None:
+        print("[x] There is no available mirror server port")
+        exit(1)
+
     serverGlobal = ServerGlobal()
     serverGlobal.SERVER_LISTEN = SERVER_LISTEN
+    serverGlobal.MIRROR_LISTEN = MIRROR_LISTEN
 
     serverGlobal.logger.info(
         "\nLOG_LEVEL: {}\n"
         "READ_BUFF_SIZE: {}\n"
         "SERVER_LISTEN: {}\n"
+        "MIRROR_LISTEN: {}\n"
         "SOCKET_TIMEOUT: {}\n"
         "NO_LOG: {}\n".format(
             serverGlobal.LOG_LEVEL,
             serverGlobal.READ_BUFF_SIZE,
             serverGlobal.SERVER_LISTEN,
+            serverGlobal.MIRROR_LISTEN,
             serverGlobal.SOCKET_TIMEOUT,
             serverGlobal.NO_LOG
         ))
@@ -299,6 +429,14 @@ if __name__ == '__main__':
     try:
         # 主控Web服务
         webthread = ControlCenter()
-        webthread.run()
+        webthread.setDaemon(True)
+        webthread.start()
+        # 反向mirror服务
+        server = ThreadingTCPServer((MIRROR_LISTEN.split(":")[0], int(MIRROR_LISTEN.split(":")[1])),
+                                    MirrorRequestHandler)
+        serverGlobal.logger.warning("MirrorServer start on {}".format(MIRROR_LISTEN))
+        server.serve_forever()
+        serverGlobal.logger.warning("MirrorServer exit")
+
     except Exception as E:
         serverGlobal.logger.exception(E)

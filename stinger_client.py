@@ -55,7 +55,7 @@ class ClientCenter(threading.Thread):
         # }
         # socket参数
         self.LOCAL_ADDR = None
-        self.READ_BUFF_SIZE = 51200
+        self.READ_BUFF_SIZE = 11200
         # 日志参数
         self.LOG_LEVEL = "INFO"
         self.logger = get_logger(level=self.LOG_LEVEL, name="StreamLogger")
@@ -102,9 +102,8 @@ class ClientCenter(threading.Thread):
             else:
                 return web_return_data
         except Exception as E:
-
             self.logger.warning("WEBSHELL return wrong data")
-            self.logger.warning(r.content)
+            self.logger.debug(r.content)
             return None
 
     def run(self):

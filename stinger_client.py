@@ -501,17 +501,19 @@ class Socks4aProxy(threading.Thread):
             self.logger.warning("socks4a server start on {}:{}".format(self._host, self._port))
         except Exception as E:
             self.logger.exception(E)
-            sys.exit(1)
+            self.logger.error("start socks4a server failed on {}:{}, maybe port is using by other process".format(self._host, self._port))
+            return False
 
+
+        self.logger.info("Socks4a ready to accept")
         while True:
             try:
-                self.logger.warning("Socks4a ready to accept")
                 conn, addr = s.accept()
                 conn.settimeout(self._timeout)
                 data = conn.recv(self._bufsize)
                 # Got a connection, handle it with process_request()
                 self._process_request(data, conn, addr)
-                self.logger.warning("Socks4a process_request finish")
+                self.logger.info("Socks4a process_request finish")
             except KeyboardInterrupt as ki:
                 self.logger.warning('Caught KeyboardInterrupt, exiting')
                 s.close()
@@ -558,18 +560,19 @@ if __name__ == '__main__':
                         required=True)
     parser.add_argument('-l', '--locallistenaddress', metavar='127.0.0.1/0.0.0.0',
                         help="local listen address for socks4",
+                        default='127.0.0.1',
                         required=True)
     parser.add_argument('-p', '--port',
                         default=60000,
                         metavar='N',
                         type=int,
-                        help="local listen port for socks4.",
+                        help="local listen port for socks4",
                         )
 
     parser.add_argument('-st', '--sockettimeout', default=0.05,
                         metavar="N",
                         type=float,
-                        help="socket timeout value,",
+                        help="socket timeout value",
                         )
     parser.add_argument('--sleeptime', default=0.01,
                         metavar="N",
@@ -641,7 +644,7 @@ if __name__ == '__main__':
     else:
         MIRROR_LISTEN = "127.0.0.1:60020"
         globalClientCenter.logger.info("REMOTE_SERVER check pass")
-        globalClientCenter.logger.info("--- Sever Config ---")
+        globalClientCenter.logger.info("------------------- Sever Config -------------------")
         for key in result:
             globalClientCenter.logger.info("{} => {}".format(key, result.get(key)))
             if key == "MIRROR_LISTEN":
@@ -675,7 +678,7 @@ if __name__ == '__main__':
     globalClientCenter.SLEEP_TIME = sleeptime
     globalClientCenter.logger.info("SLEEP_TIME : {}".format(sleeptime))
 
-    globalClientCenter.logger.info("--- RAT Config ---")
+    globalClientCenter.logger.info("------------------- RAT Config -------------------")
     globalClientCenter.logger.info(
         "Handler/LISTEN should listen on {}:{}".format(globalClientCenter.TARGET_IP, globalClientCenter.TARGET_PORT))
     globalClientCenter.logger.info(

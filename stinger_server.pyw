@@ -188,7 +188,6 @@ class ControlCenter(threading.Thread):
     @route(URL_STINGER_SYNC, method='POST')
     def sync():
         # 获取webshell发送的数据
-
         post_return_data = {}
         mirror_post_return_data = {}
         try:
@@ -266,7 +265,6 @@ class ControlCenter(threading.Thread):
                     if len(tcp_send_data) > 0:
                         serverGlobal.logger.info(
                             "CLIENT_ADDRESS:{} TCP_SEND_LEN:{}".format(client_address, len(tcp_send_data)))
-
                     send_flag = True
                     break
                 except Exception as E:  # socket 已失效

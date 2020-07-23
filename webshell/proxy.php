@@ -1,15 +1,7 @@
 <?php
 ini_set("display_errors", "On");
 if ($_SERVER['REQUEST_METHOD'] === 'GET') {
-    print("curl_init\n");
-    var_dump(function_exists("curl_init"));
-    print("\nfsockopen\n");
-    var_dump(function_exists("fsockopen"));
-    print("\nfile_get_contents\n");
-    var_dump(function_exists("file_get_contents"));
-    print("\nstream_context_create\n");
-    var_dump(function_exists("stream_context_create"));
-    exit("stinger php!");
+    exit("UTF-8");
 }
 function my_socket_post($url, $data)
 {
@@ -85,7 +77,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $url = $RemoteServer . $Endpoint;
         my_socket_post($url, $post_arg);
     }else {
-        exit("stinger php error!");
+        exit("UTF-8 error!");
     }
 }
 ?>

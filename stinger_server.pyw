@@ -8,15 +8,11 @@
 
 ########### only for python2.7 because pyinstaller
 
-try:
-    from socketserver import BaseRequestHandler
-    from socketserver import ThreadingTCPServer
-except Exception as E:
-    from SocketServer import BaseRequestHandler
-    from SocketServer import ThreadingTCPServer
 import os
 import threading
 import time
+from SocketServer import BaseRequestHandler
+from SocketServer import ThreadingTCPServer
 from socket import AF_INET, SOCK_STREAM
 
 from bottle import request, route, run as bottle_run
@@ -51,6 +47,8 @@ class ServerGlobal(object):
 
         self.SERVER_LISTEN = None
         self.MIRROR_LISTEN = None
+        self.HAS_DATA = False
+        self.WAIT = 0
 
     def set(self, tag, data):
         """设置服务端参数"""
@@ -115,7 +113,7 @@ class ControlCenter(threading.Thread):
         try:
             unformat_SENDDATA = request.forms.get("SENDDATA")
             serverGlobal.logger.debug(unformat_SENDDATA)
-            senddata = newLoads(unformat_SENDDATA)
+            senddata = diyDecode(unformat_SENDDATA)
         except Exception as E:
             serverGlobal.logger.exception(E)
             return None
@@ -131,17 +129,15 @@ class ControlCenter(threading.Thread):
     def set_config():
         """参数设置函数"""
         try:
-            serverGlobal.logger.warn("set_config in")
             senddata = ControlCenter._get_post_data(request)
             tag = senddata.get(CONFIG_TAG)
             data = senddata.get(CONFIG_DATA)
             result = serverGlobal.set(tag, data)
-            serverGlobal.logger.warn("set_config out")
-            return newDumps(result)
+            return diyEncode(result)
         except Exception as E:
             serverGlobal.logger.exception(E)
             web_return_data = {ERROR_CODE: str(E)}
-            return newDumps(web_return_data)
+            return diyEncode(web_return_data)
 
     @staticmethod
     @route(URL_CMD, method='POST')
@@ -154,11 +150,11 @@ class ControlCenter(threading.Thread):
             data = senddata.get(CONFIG_DATA)
             result = serverGlobal.cmd(tag, data)
             serverGlobal.logger.warn("run_cmd out")
-            return newDumps(result)
+            return diyEncode(result)
         except Exception as E:
             serverGlobal.logger.exception(E)
             web_return_data = {ERROR_CODE: str(E)}
-            return newDumps(web_return_data)
+            return diyEncode(web_return_data)
 
     @staticmethod
     @route(URL_CHECK, method='POST')
@@ -182,7 +178,7 @@ class ControlCenter(threading.Thread):
             "SERVER_LISTEN": serverGlobal.SERVER_LISTEN,
             "MIRROR_LISTEN": serverGlobal.MIRROR_LISTEN,
         }
-        return newDumps(data)
+        return diyEncode(data)
 
     @staticmethod
     @route(URL_STINGER_SYNC, method='POST')
@@ -200,8 +196,9 @@ class ControlCenter(threading.Thread):
         except Exception as E:
             serverGlobal.logger.exception(E)
             post_return_data = {ERROR_CODE: str(E)}
-            return newDumps(post_return_data)
+            return diyEncode(post_return_data)
 
+        serverGlobal.HAS_DATA = False
         # 处理die_client
         for client_address in die_client_address:
             try:
@@ -283,12 +280,12 @@ class ControlCenter(threading.Thread):
             revc_flag = False
             for i in range(1):
                 try:
-                    # server_socket_conn.settimeout((i*3+1)*serverGlobal.SOCKET_TIMEOUT)
                     tcp_recv_data = server_socket_conn.recv(serverGlobal.READ_BUFF_SIZE)
                     post_return_data[client_address] = {"data": base64.b64encode(tcp_recv_data)}
                     serverGlobal.logger.debug(
                         "CLIENT_ADDRESS:{} TCP_RECV_DATA:{}".format(client_address, tcp_recv_data))
                     if len(tcp_recv_data) > 0:
+                        serverGlobal.HAS_DATA = True
                         serverGlobal.logger.info(
                             "CLIENT_ADDRESS:{} TCP_RECV_LEN:{}".format(client_address, len(tcp_recv_data)))
                     revc_flag = True
@@ -299,6 +296,7 @@ class ControlCenter(threading.Thread):
                 tcp_recv_data = b""
                 post_return_data[client_address] = {"data": base64.b64encode(tcp_recv_data)}
                 serverGlobal.logger.debug("TCP_RECV_NONE")
+
 
         # mirror
         # 处理client tcp接收的数据(mirror)
@@ -360,9 +358,11 @@ class ControlCenter(threading.Thread):
                     serverGlobal.logger.debug(
                         "MIRROR_CLIENT_ADDRESS:{} SERVER_TCP_RECV_DATA:{}".format(mirror_client_address, tcp_recv_data))
                     if len(tcp_recv_data) > 0:
+                        serverGlobal.HAS_DATA = True
                         serverGlobal.logger.info(
                             "MIRROR_CLIENT_ADDRESS:{} SERVER_TCP_RECV_LEN:{}".format(mirror_client_address,
                                                                                      len(tcp_recv_data)))
+
                     revc_flag = True
                     break
                 except Exception as err:
@@ -372,9 +372,22 @@ class ControlCenter(threading.Thread):
                 mirror_post_return_data[mirror_client_address] = {"data": base64.b64encode(tcp_recv_data)}
                 serverGlobal.logger.debug("TCP_RECV_NONE")
 
+
+        if serverGlobal.HAS_DATA is True:
+            serverGlobal.WAIT = 0
+        else:
+            if serverGlobal.WAIT >= 3:
+                serverGlobal.WAIT = 3
+            else:
+                serverGlobal.WAIT += 0.05
+
         # 循环结束,返回web数据
-        return_data = {RETURN_DATA: post_return_data, MIRROR_RETURN_DATA: mirror_post_return_data}
-        return newDumps(return_data)
+        return_data = {
+            RETURN_DATA: post_return_data,
+            MIRROR_RETURN_DATA: mirror_post_return_data,
+            WAIT_TIME: serverGlobal.WAIT
+        }
+        return diyEncode(return_data)
 
 
 if __name__ == '__main__':

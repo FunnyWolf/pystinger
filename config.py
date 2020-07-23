@@ -15,40 +15,37 @@ import sys
 LOCALADDR = "127.0.0.1"
 
 # 错误码
-ERROR_CODE = "ERROR_CODE"
-DEFAULT_SOCKET_TIMEOUT = 0.05
+ERROR_CODE = "error_code"
+DEFAULT_SOCKET_TIMEOUT = 0.5
+
 # url路由
 URL_SET_CONFIG = "/set_config/"
 URL_CHECK = "/check/"
-URL_STINGER_SYNC = "/stinger_sync/"
+URL_STINGER_SYNC = "/data_sync/"
 URL_CMD = "/cmd/"
 # 参数标签
-DATA_TAG = "DATA"
-DIE_CLIENT_ADDRESS_TAG = "Die_client_address"
+DATA_TAG = "data"
+DIE_CLIENT_ADDRESS_TAG = "close_clients"
 
-MIRROR_DATA_TAG = "MIRROR_DATA"
-MIRROR_DIE_CLIENT_ADDRESS_TAG = "Mirror_Die_client_address"
+MIRROR_DATA_TAG = "mirror_data"
+MIRROR_DIE_CLIENT_ADDRESS_TAG = "mirror_close_clients"
 
-RETURN_DATA = "RETURN_DATA"
-MIRROR_RETURN_DATA = "MIRROR_RETURN_DATA"
+RETURN_DATA = "return_data"
+MIRROR_RETURN_DATA = "mirror_return_data"
 
-CONFIG_TAG = "TAG"
-CONFIG_DATA = "DATA"
+CONFIG_TAG = "tag"
+CONFIG_DATA = "data"
 
-# 公共标签
-RESULT = "RESULT"
+WAIT_TIME = "wait"
 
 CONTROL_PORT = [60010, 60011, 60012, 60013, 60014]
 MIRROR_PORT = [60020, 60021, 60022, 60023, 60024]
+
 # Buffer size to use when calling socket.recv()
 BUFSIZE = 51200
 
 # Number of connections to keep in backlog when calling socket.listen()
 BACKLOG = 200
-
-# Timeout (in seconds) for connecting to application servers via a CONNECT request
-# or waiting for a connection via a BIND request
-SOCKS_TIMEOUT = 3
 
 # Version code in server responses (Should always be 0 as specified in the SOCKS4 spec)
 SERVER_VN = 0x00
@@ -65,7 +62,6 @@ RESPONSE_CD_REQUEST_GRANTED = 90
 RESPONSE_CD_REQUEST_REJECTED = 91
 
 
-# 	data = strings.Replace(strings.Replace(data, "\r\n", "", -1), "\n", "", -1)
 def get_logger(level="INFO", name="StreamLogger"):
     logconfig = {
         'version': 1,
@@ -80,12 +76,6 @@ def get_logger(level="INFO", name="StreamLogger"):
                 'level': 'DEBUG',
                 'formatter': 'simple'
             },
-            # 'file': {
-            #     'class': 'logging.FileHandler',
-            #     'filename': 'logging.log',
-            #     'level': 'WARN',
-            #     'formatter': 'simple'
-            # },
         },
         'loggers': {
             'StreamLogger': {
@@ -97,25 +87,23 @@ def get_logger(level="INFO", name="StreamLogger"):
 
     logging.config.dictConfig(logconfig)
     logger = logging.getLogger(name)
-
     return logger
 
 
-class NewEncoder(json.JSONEncoder):
+class NewJsonEncoder(json.JSONEncoder):
     def default(self, obj):
         if isinstance(obj, bytes):
             return obj.decode(encoding='utf-8', errors="ignore")
         return json.JSONEncoder.default(self, obj)
 
 
-def newLoads(data):
+def diyDecode(data):
     web_return_data = json.loads(b64decodeX(data))
     return web_return_data
 
 
-def newDumps(data):
-    web_return_data = b64encodeX(json.dumps(data, cls=NewEncoder))
-
+def diyEncode(data):
+    web_return_data = b64encodeX(json.dumps(data, cls=NewJsonEncoder))
     return web_return_data
 
 

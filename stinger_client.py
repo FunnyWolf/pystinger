@@ -282,7 +282,6 @@ class ClientCenter(threading.Thread):
             wait = 0
         else:
             wait = return_data.get(WAIT_TIME)
-        print(wait)
         time.sleep(wait)
 
     def setc_webshell(self, WEBSHELL):

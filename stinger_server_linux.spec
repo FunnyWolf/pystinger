@@ -38,4 +38,4 @@ exe = EXE(pyz,
           strip=False,
           upx=True,
           runtime_tmpdir=None,
-          console=True )13844165516
+          console=True )

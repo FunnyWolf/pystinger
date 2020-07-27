@@ -6,6 +6,8 @@
 
 主体使用python开发,当前支持php,jsp(x),aspx三种代理脚本.
 
+原理介绍 : [红队攻防实践：不出网主机搭建内网隧道新思路](https://mp.weixin.qq.com/s/45AKbRS677fxynKW6Qfz7w)
+
 # 使用方法
 
 > 假设不出网服务器域名为 [http://example.com:8080](http://192.168.3.11:8080) ,服务器内网IP地址为192.168.3.11

@@ -16,7 +16,7 @@ LOCALADDR = "127.0.0.1"
 
 # 错误码
 ERROR_CODE = "error_code"
-DEFAULT_SOCKET_TIMEOUT = 0.5
+DEFAULT_SOCKET_TIMEOUT = 0.2
 
 # url路由
 URL_SET_CONFIG = "/set_config/"

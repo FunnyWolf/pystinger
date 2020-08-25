@@ -122,6 +122,15 @@ root@kali:~# ./stinger_client -w http://example.com:8080:8080/proxy.jsp -l 127.0
 * 生成payload,上传到主机运行后即可上线
 * 横向移动到其他主机时可以将payload指向192.168.3.11:60020即可实现出网上线
 
+## 定制Header及proxy
+* 如果webshell需要配置Cookie或者Authorization,可通过--header参数配置请求头
+
+```--header "Authorization: XXXXXX,Cookie: XXXXX"```
+
+* 如果webshell需要通过代理访问,可通过--proxy设置代理
+
+```--proxy "socks5:127.0.0.1:1081"```
+
 
 # 相关工具
 [https://github.com/nccgroup/ABPTTS](https://github.com/nccgroup/ABPTTS)

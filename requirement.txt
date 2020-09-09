@@ -1,4 +1,4 @@
-PyInstaller
+PyInstaller==3.6
 requests
 bottle
 twisted

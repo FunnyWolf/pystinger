@@ -139,6 +139,15 @@ root@kali:~# ./stinger_client -w http://example.com:8080/proxy.jsp -l 127.0.0.1 
 
 [https://github.com/SECFORCE/Tunna](https://github.com/SECFORCE/Tunna)
 
+
+The development is supported by the software from jetbrains.</br>
+https://www.jetbrains.com/?from=pystinger
+
+<a href="https://www.jetbrains.com/?from=pystinger" target="_blank">
+  <img src="jetbrains.svg">
+</a>
+
+
 # 已测试
 ## stinger_server\stinger_client
 * windows 

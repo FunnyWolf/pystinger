@@ -66,10 +66,10 @@
 %>
 <%
     String method = request.getMethod();
-    if (method == "GET") {
+    if (method.equals("GET")) {
         out.print("UTF-8");
         return;
-    } else if (method == "POST") {
+    } else if (method.equals("POST")) {
         String Endpoint = request.getParameter("Endpoint");
         String Remoteserver = request.getParameter("Remoteserver");
         String url = Remoteserver + Endpoint;

@@ -8,7 +8,6 @@ It can be directly used by metasploit-framework, viper, cobalt strike for sessio
 
 Pystinger is developed in python, and currently supports three proxy scripts: php, jsp(x) and aspx.
 
-Principle introduction : [红队攻防实践：不出网主机搭建内网隧道新思路](https://mp.weixin.qq.com/s/45AKbRS677fxynKW6Qfz7w)
 
 # Usage
 > Suppose the domain name of the server is[ http://example.com :8080](http://192.168.3.11:8080) The intranet IPAddress of the server intranet is 192.168.3.11

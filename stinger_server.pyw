@@ -14,12 +14,63 @@ import time
 from SocketServer import BaseRequestHandler
 from SocketServer import ThreadingTCPServer
 from socket import AF_INET, SOCK_STREAM
+from threading import Thread
 
 from bottle import request, route, run as bottle_run
 
 from config import *
 
 global serverGlobal
+
+
+def handle_socks_data(server_socket_conn, tcp_send_data, client_address):
+    # 发送数据
+    send_flag = False
+    for i in range(3):
+        if tcp_send_data == '':
+            # 无数据发送跳出
+            send_flag = True
+            break
+        try:
+            server_socket_conn.settimeout((i * 10 + 1) * serverGlobal.SOCKET_TIMEOUT)
+            server_socket_conn.sendall(tcp_send_data)
+            if len(tcp_send_data) > 0:
+                serverGlobal.logger.info(
+                    "CLIENT_ADDRESS:{} TCP_SEND_LEN:{}".format(client_address, len(tcp_send_data)))
+            send_flag = True
+            break
+        except Exception as E:  # socket 已失效
+            serverGlobal.logger.warning("CLIENT_ADDRESS:{} Client send failed".format(client_address))
+            serverGlobal.logger.exception(E)
+
+    if send_flag is not True:
+        try:
+            server_socket_conn.close()
+            serverGlobal.CHCHE_CONNS.pop(client_address)
+        except Exception as E:
+            serverGlobal.logger.exception(E)
+        return
+
+    # 读取数据 tcp数据
+    revc_flag = False
+    for i in range(1):
+        try:
+            tcp_recv_data = server_socket_conn.recv(serverGlobal.READ_BUFF_SIZE)
+            serverGlobal.post_return_data[client_address] = {"data": base64.b64encode(tcp_recv_data)}
+            serverGlobal.logger.debug(
+                "CLIENT_ADDRESS:{} TCP_RECV_DATA:{}".format(client_address, tcp_recv_data))
+            if len(tcp_recv_data) > 0:
+                serverGlobal.HAS_DATA = True
+                serverGlobal.logger.info(
+                    "CLIENT_ADDRESS:{} TCP_RECV_LEN:{}".format(client_address, len(tcp_recv_data)))
+            revc_flag = True
+            break
+        except Exception as err:
+            pass
+    if revc_flag is not True:
+        tcp_recv_data = b""
+        serverGlobal.post_return_data[client_address] = {"data": base64.b64encode(tcp_recv_data)}
+        serverGlobal.logger.debug("TCP_RECV_NONE")
 
 
 class MirrorRequestHandler(BaseRequestHandler):
@@ -49,6 +100,7 @@ class ServerGlobal(object):
         self.MIRROR_LISTEN = None
         self.HAS_DATA = False
         self.WAIT = 0
+        self.post_return_data = {}
 
     def set(self, tag, data):
         """设置服务端参数"""
@@ -130,6 +182,11 @@ class ControlCenter(threading.Thread):
         """参数设置函数"""
         try:
             senddata = ControlCenter._get_post_data(request)
+            # 获取数据错误
+            if senddata is None:
+                web_return_data = {ERROR_CODE: "Can not get data from post request"}
+                return diyEncode(web_return_data)
+
             tag = senddata.get(CONFIG_TAG)
             data = senddata.get(CONFIG_DATA)
             result = serverGlobal.set(tag, data)
@@ -146,6 +203,12 @@ class ControlCenter(threading.Thread):
         try:
             serverGlobal.logger.warn("run_cmd in")
             senddata = ControlCenter._get_post_data(request)
+
+            # 获取数据错误
+            if senddata is None:
+                web_return_data = {ERROR_CODE: "Can not get data from post request"}
+                return diyEncode(web_return_data)
+
             tag = senddata.get(CONFIG_TAG)
             data = senddata.get(CONFIG_DATA)
             result = serverGlobal.cmd(tag, data)
@@ -184,19 +247,26 @@ class ControlCenter(threading.Thread):
     @route(URL_STINGER_SYNC, method='POST')
     def sync():
         # 获取webshell发送的数据
-        post_return_data = {}
+        serverGlobal.post_return_data = {}
         mirror_post_return_data = {}
         try:
             senddata = ControlCenter._get_post_data(request)
+            # 获取数据错误
+            if senddata is None:
+                web_return_data = {ERROR_CODE: "Can not get data from post request"}
+                return diyEncode(web_return_data)
+
+            # 获取socks4a代理数据
             post_send_data = senddata.get(DATA_TAG)
             die_client_address = senddata.get(DIE_CLIENT_ADDRESS_TAG)
 
+            # 获取mirror转发数据
             mirror_post_send_data = senddata.get(MIRROR_DATA_TAG)
             mirror_die_client_address = senddata.get(MIRROR_DIE_CLIENT_ADDRESS_TAG)
         except Exception as E:
             serverGlobal.logger.exception(E)
-            post_return_data = {ERROR_CODE: str(E)}
-            return diyEncode(post_return_data)
+            serverGlobal.post_return_data = {ERROR_CODE: str(E)}
+            return diyEncode(serverGlobal.post_return_data)
 
         serverGlobal.HAS_DATA = False
         # 处理die_client
@@ -217,12 +287,12 @@ class ControlCenter(threading.Thread):
                 serverGlobal.logger.warning(
                     "CLIENT_ADDRESS:{} Close mirror_die_client_address error".format(client_address))
 
-        # 处理tcp发送的数据
+        thread_list = []
+        # 处理socks4a代理发送的数据
         for client_address in list(post_send_data.keys()):
             client_address_one_data = post_send_data.get(client_address)
-
             if serverGlobal.CHCHE_CONNS.get(client_address) is None:
-                # 新建链接
+                # 新建连接
                 try:
                     server_socket_conn = socket.socket(AF_INET, SOCK_STREAM)
                     server_socket_conn.settimeout(serverGlobal.SOCKET_TIMEOUT)
@@ -241,62 +311,24 @@ class ControlCenter(threading.Thread):
                                                                                                "targetaddr"), E))
                     continue
             else:
+                # 已有连接
                 server_socket_conn = serverGlobal.CHCHE_CONNS.get(client_address).get("conn")
 
-            # 发送数据 tcp数据
+            # 读取数据
             try:
                 tcp_send_data = base64.b64decode(client_address_one_data.get("data"))
             except Exception as E:
                 serverGlobal.logger.exception(E)
                 continue
 
-            send_flag = False
-            for i in range(3):
-                if tcp_send_data == '':
-                    # 无数据发送跳出
-                    send_flag = True
-                    break
-                try:
-                    server_socket_conn.settimeout((i * 10 + 1) * serverGlobal.SOCKET_TIMEOUT)
-                    server_socket_conn.sendall(tcp_send_data)
-                    if len(tcp_send_data) > 0:
-                        serverGlobal.logger.info(
-                            "CLIENT_ADDRESS:{} TCP_SEND_LEN:{}".format(client_address, len(tcp_send_data)))
-                    send_flag = True
-                    break
-                except Exception as E:  # socket 已失效
-                    serverGlobal.logger.warning("CLIENT_ADDRESS:{} Client send failed".format(client_address))
-                    serverGlobal.logger.exception(E)
+            temp = Thread(target=handle_socks_data,
+                          args=(server_socket_conn, tcp_send_data, client_address))
+            thread_list.append(temp)
 
-            if send_flag is not True:
-                try:
-                    server_socket_conn.close()
-                    serverGlobal.CHCHE_CONNS.pop(client_address)
-                except Exception as E:
-                    serverGlobal.logger.exception(E)
-                continue
-
-            # 读取数据 tcp数据
-            revc_flag = False
-            for i in range(1):
-                try:
-                    tcp_recv_data = server_socket_conn.recv(serverGlobal.READ_BUFF_SIZE)
-                    post_return_data[client_address] = {"data": base64.b64encode(tcp_recv_data)}
-                    serverGlobal.logger.debug(
-                        "CLIENT_ADDRESS:{} TCP_RECV_DATA:{}".format(client_address, tcp_recv_data))
-                    if len(tcp_recv_data) > 0:
-                        serverGlobal.HAS_DATA = True
-                        serverGlobal.logger.info(
-                            "CLIENT_ADDRESS:{} TCP_RECV_LEN:{}".format(client_address, len(tcp_recv_data)))
-                    revc_flag = True
-                    break
-                except Exception as err:
-                    pass
-            if revc_flag is not True:
-                tcp_recv_data = b""
-                post_return_data[client_address] = {"data": base64.b64encode(tcp_recv_data)}
-                serverGlobal.logger.debug("TCP_RECV_NONE")
-
+        for temp in thread_list:
+            temp.start()
+        for temp in thread_list:
+            temp.join()
 
         # mirror
         # 处理client tcp接收的数据(mirror)
@@ -352,7 +384,6 @@ class ControlCenter(threading.Thread):
             revc_flag = False
             for i in range(1):
                 try:
-                    # server_socket_conn.settimeout((i*3+1)*serverGlobal.SOCKET_TIMEOUT)
                     tcp_recv_data = server_socket_conn.recv(serverGlobal.READ_BUFF_SIZE)
                     mirror_post_return_data[mirror_client_address] = {"data": base64.b64encode(tcp_recv_data)}
                     serverGlobal.logger.debug(
@@ -372,7 +403,7 @@ class ControlCenter(threading.Thread):
                 mirror_post_return_data[mirror_client_address] = {"data": base64.b64encode(tcp_recv_data)}
                 serverGlobal.logger.debug("TCP_RECV_NONE")
 
-
+        serverGlobal.WAIT = 0
         if serverGlobal.HAS_DATA is True:
             serverGlobal.WAIT = 0
         else:
@@ -383,7 +414,7 @@ class ControlCenter(threading.Thread):
 
         # 循环结束,返回web数据
         return_data = {
-            RETURN_DATA: post_return_data,
+            RETURN_DATA: serverGlobal.post_return_data,
             MIRROR_RETURN_DATA: mirror_post_return_data,
             WAIT_TIME: serverGlobal.WAIT
         }
@@ -448,10 +479,10 @@ if __name__ == '__main__':
         webthread.setDaemon(True)
         webthread.start()
         # 反向mirror服务
-        server = ThreadingTCPServer((MIRROR_LISTEN.split(":")[0], int(MIRROR_LISTEN.split(":")[1])),
-                                    MirrorRequestHandler)
+        webserver = ThreadingTCPServer((MIRROR_LISTEN.split(":")[0], int(MIRROR_LISTEN.split(":")[1])),
+                                       MirrorRequestHandler)
         serverGlobal.logger.warning("MirrorServer start on {}".format(MIRROR_LISTEN))
-        server.serve_forever()
+        webserver.serve_forever()
         serverGlobal.logger.warning("MirrorServer exit")
 
     except Exception as E:

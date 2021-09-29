@@ -86,7 +86,7 @@ class ClientCenter(threading.Thread):
         except Exception as E:
             self.logger.exception(E)
             return False
-        self.logger.info("------------ Custom http request header ------------")
+        self.logger.info("------------ Custom Http Request Header ------------")
         self.logger.info(self.headers)
         self.logger.info("\n")
         return True
@@ -94,7 +94,7 @@ class ClientCenter(threading.Thread):
     def custom_proxy(self, proxy):
         self.proxy = {'http': proxy, 'https': proxy}
         self.session.proxies = self.proxy
-        self.logger.info("------------ Custom http request proxy ------------")
+        self.logger.info("------------ Custom Http Request Proxy ------------")
         self.logger.info(self.proxy)
         self.logger.info("\n")
         return True

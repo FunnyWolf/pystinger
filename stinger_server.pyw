@@ -53,20 +53,18 @@ def handle_socks_data(server_socket_conn, tcp_send_data, client_address):
 
     # 读取数据 tcp数据
     revc_flag = False
-    for i in range(1):
-        try:
-            tcp_recv_data = server_socket_conn.recv(serverGlobal.READ_BUFF_SIZE)
-            serverGlobal.post_return_data[client_address] = {"data": base64.b64encode(tcp_recv_data)}
-            serverGlobal.logger.debug(
-                "CLIENT_ADDRESS:{} TCP_RECV_DATA:{}".format(client_address, tcp_recv_data))
-            if len(tcp_recv_data) > 0:
-                serverGlobal.HAS_DATA = True
-                serverGlobal.logger.info(
-                    "CLIENT_ADDRESS:{} TCP_RECV_LEN:{}".format(client_address, len(tcp_recv_data)))
-            revc_flag = True
-            break
-        except Exception as err:
-            pass
+    try:
+        tcp_recv_data = server_socket_conn.recv(serverGlobal.READ_BUFF_SIZE)
+        serverGlobal.post_return_data[client_address] = {"data": base64.b64encode(tcp_recv_data)}
+        serverGlobal.logger.debug(
+            "CLIENT_ADDRESS:{} TCP_RECV_DATA:{}".format(client_address, tcp_recv_data))
+        if len(tcp_recv_data) > 0:
+            serverGlobal.HAS_DATA = True
+            serverGlobal.logger.info(
+                "CLIENT_ADDRESS:{} TCP_RECV_LEN:{}".format(client_address, len(tcp_recv_data)))
+        revc_flag = True
+    except Exception as err:
+        pass
     if revc_flag is not True:
         tcp_recv_data = b""
         serverGlobal.post_return_data[client_address] = {"data": base64.b64encode(tcp_recv_data)}
@@ -174,7 +172,7 @@ class ControlCenter(threading.Thread):
     @staticmethod
     @route('/')
     def index():
-        return '<b>Hello stinger</b>!'
+        return '<b>Hello World</b>!'
 
     @staticmethod
     @route(URL_SET_CONFIG, method='POST')

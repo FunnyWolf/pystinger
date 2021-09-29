@@ -14,16 +14,16 @@ import sys
 
 LOCALADDR = "127.0.0.1"
 
-# 错误码
+# ERROR_CODE
 ERROR_CODE = "error_code"
 DEFAULT_SOCKET_TIMEOUT = 0.2
 
-# url路由
+# url route
 URL_SET_CONFIG = "/set_config/"
 URL_CHECK = "/check/"
 URL_STINGER_SYNC = "/data_sync/"
 URL_CMD = "/cmd/"
-# 参数标签
+# args mark
 DATA_TAG = "data"
 DIE_CLIENT_ADDRESS_TAG = "close_clients"
 
